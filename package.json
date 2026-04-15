@@ -1,10 +1,11 @@
 {
-  "name": "memex-cli",
+  "name": "ai-memex-cli",
   "version": "0.1.0",
   "description": "A CLI tool for building and managing LLM-powered persistent knowledge bases (Wiki) for AI agents like Claude Code",
   "type": "module",
   "bin": {
-    "memex": "./bin/memex.js"
+    "memex": "./bin/memex.js",
+    "ai-memex": "./bin/memex.js"
   },
   "scripts": {
     "dev": "node bin/memex.js",

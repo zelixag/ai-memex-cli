@@ -1,8 +1,8 @@
-# memex
+# ai-memex-cli
 
 > A CLI tool for building LLM-powered persistent knowledge bases — giving AI agents like Claude Code a compounding, persistent memory.
 
-[![npm version](https://badge.fury.io/js/memex-cli.svg)](https://badge.fury.io/js/memex-cli)
+[![npm version](https://badge.fury.io/js/ai-memex-cli.svg)](https://badge.fury.io/js/ai-memex-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ---
@@ -37,13 +37,13 @@ This is inspired by [Vannevar Bush's Memex (1945)](https://en.wikipedia.org/wiki
 ## Installation
 
 ```bash
-npm install -g memex-cli
+npm install -g ai-memex-cli
 ```
 
 Or run directly with npx:
 
 ```bash
-npx memex-cli init my-kb
+npx ai-memex-cli init my-kb
 ```
 
 ### Requirements
