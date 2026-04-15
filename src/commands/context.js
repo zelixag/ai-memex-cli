@@ -1,0 +1,206 @@
+import { writeFileSync } from 'fs';
+import { join } from 'path';
+import ora from 'ora';
+import chalk from 'chalk';
+
+import { printBanner, printSuccess, printError, printInfo, printDivider, printSection } from '../lib/ui.js';
+import { getActiveKbPath } from '../lib/config.js';
+import { getKbStructure, listWikiPages, readIndex, readSchema, readLog, getKbConfig } from '../lib/kb.js';
+import { llmCall, estimateTokens } from '../lib/llm.js';
+import { readFileSync } from 'fs';
+
+const ROLE_FOCUS = {
+  'backend-engineer': {
+    tags: ['backend', 'api', 'database', 'architecture', 'pattern', 'decision'],
+    description: 'Backend engineering: APIs, data models, service patterns, performance',
+  },
+  'frontend-engineer': {
+    tags: ['frontend', 'ui', 'component', 'state', 'ux', 'pattern'],
+    description: 'Frontend engineering: component patterns, state management, UX decisions',
+  },
+  'tech-lead': {
+    tags: ['architecture', 'decision', 'adr', 'team', 'process', 'pattern'],
+    description: 'Technical leadership: architecture decisions, team conventions, ADRs',
+  },
+  'devops': {
+    tags: ['devops', 'deployment', 'monitoring', 'runbook', 'infrastructure'],
+    description: 'DevOps: deployment, monitoring, incident runbooks, infrastructure',
+  },
+  'researcher': {
+    tags: ['research', 'paper', 'concept', 'synthesis', 'finding'],
+    description: 'Research: key findings, concepts, syntheses across papers',
+  },
+  'full-stack': {
+    tags: [], // all tags
+    description: 'Full-stack: comprehensive view across all domains',
+  },
+};
+
+export async function contextCommand(options) {
+  printBanner('memex context', 'Generate distilled context for AI agents');
+
+  let kbPath;
+  try {
+    kbPath = getActiveKbPath(options.kb);
+  } catch (err) {
+    printError(err.message);
+    process.exit(1);
+  }
+
+  const maxTokens = parseInt(options.maxTokens || '8000', 10);
+  const role = options.role;
+  const roleFocus = role ? ROLE_FOCUS[role] : null;
+
+  const kbConfig = getKbConfig(kbPath);
+  const schema = readSchema(kbPath);
+  const index = readIndex(kbPath);
+
+  // Step 1: Load relevant pages
+  const loadSpinner = ora('Loading wiki pages...').start();
+  let pages;
+  try {
+    pages = await listWikiPages(kbPath);
+
+    // Filter by role if specified
+    if (roleFocus && roleFocus.tags.length > 0) {
+      const roleTags = new Set(roleFocus.tags);
+      pages = pages.filter(p => p.tags?.some(t => roleTags.has(t)));
+    }
+
+    loadSpinner.succeed(`Loaded ${pages.length} relevant page(s)`);
+  } catch (err) {
+    loadSpinner.fail('Failed to load pages');
+    printError(err.message);
+    process.exit(1);
+  }
+
+  // Step 2: Prioritize and select pages within token budget
+  const distillSpinner = ora('Distilling context with LLM...').start();
+  let contextOutput;
+  try {
+    // Read page contents
+    const pageContents = pages.map(p => ({
+      name: p.name,
+      title: p.title,
+      tags: p.tags,
+      content: readFileSync(p.path, 'utf8'),
+    }));
+
+    // Calculate rough token budget
+    const schemaTokens = estimateTokens(schema);
+    const availableTokens = maxTokens - schemaTokens - 500; // reserve for header
+
+    contextOutput = await llmCall(
+      buildContextSystemPrompt(kbConfig, role, roleFocus),
+      buildContextUserPrompt(pageContents, index, availableTokens, role)
+    );
+
+    distillSpinner.succeed('Context distilled');
+  } catch (err) {
+    distillSpinner.fail('LLM distillation failed');
+    printError(err.message);
+    process.exit(1);
+  }
+
+  // Step 3: Build final context document
+  const header = buildContextHeader(kbConfig, role, pages.length);
+  const finalContext = header + '\n\n' + contextOutput;
+
+  const tokenEstimate = estimateTokens(finalContext);
+
+  // Step 4: Output
+  if (options.output) {
+    writeFileSync(options.output, finalContext);
+    printSuccess(`Context saved to: ${options.output}`);
+    printInfo(`Estimated tokens: ~${tokenEstimate.toLocaleString()}`);
+  } else {
+    printDivider();
+    console.log(finalContext);
+    printDivider();
+    printInfo(`Estimated tokens: ~${tokenEstimate.toLocaleString()}`);
+    printInfo('Use --output <file> to save to a file');
+    printInfo('Tip: Paste this into CLAUDE.md or your agent\'s system prompt');
+  }
+
+  // Show usage tips
+  console.log('');
+  printSection('Usage tips');
+  console.log(`  ${chalk.cyan('For Claude Code:')}  Add to CLAUDE.md in your project root`);
+  console.log(`  ${chalk.cyan('For Cursor:')}       Add to .cursorrules`);
+  console.log(`  ${chalk.cyan('For any agent:')}    Paste as system prompt context`);
+  console.log('');
+  console.log(`  ${chalk.gray('Refresh:')}  memex context${role ? ` --role ${role}` : ''}${options.output ? ` --output ${options.output}` : ''}`);
+}
+
+function buildContextHeader(kbConfig, role, pageCount) {
+  const lines = [
+    `# Knowledge Base Context — ${kbConfig.name || 'Unnamed KB'}`,
+    ``,
+    `> Generated by memex on ${new Date().toISOString().split('T')[0]}`,
+    `> Pages: ${pageCount} | Role: ${role || 'general'}`,
+    `> This context is distilled from the knowledge base. Refer to [[wiki/index.md]] for the full index.`,
+  ];
+  return lines.join('\n');
+}
+
+function buildContextSystemPrompt(kbConfig, role, roleFocus) {
+  return `You are a context distiller for an AI agent knowledge base.
+
+Your job: synthesize wiki pages into a compact, high-signal context document that an AI agent can use as its working memory at the start of a conversation.
+
+${role ? `## Target Role: ${role}\nFocus: ${roleFocus?.description || role}` : '## Target: General use'}
+
+Rules:
+- Be extremely concise — every word must earn its place
+- Prioritize actionable knowledge: decisions, patterns, best practices
+- Use markdown with clear sections
+- Include [[wiki/page-name]] references so the agent knows where to find more detail
+- Highlight the most important decisions and conventions
+- Group related knowledge together
+- End with a "Key References" section listing the most important wiki pages
+
+Output format:
+## [Domain/Topic]
+[Concise synthesis of key knowledge]
+
+> **Decision**: [Important decision]
+> **Best Practice**: [Important practice]
+
+[[relevant-page]], [[another-page]]`;
+}
+
+function buildContextUserPrompt(pageContents, index, tokenBudget, role) {
+  // Truncate content to fit in budget
+  let totalChars = 0;
+  const maxChars = tokenBudget * 4; // rough estimate
+  const selectedPages = [];
+
+  for (const page of pageContents) {
+    const pageChars = page.content.length;
+    if (totalChars + pageChars > maxChars) {
+      // Include truncated version
+      const remaining = maxChars - totalChars;
+      if (remaining > 200) {
+        selectedPages.push({
+          ...page,
+          content: page.content.slice(0, remaining) + '\n[... truncated ...]',
+        });
+      }
+      break;
+    }
+    selectedPages.push(page);
+    totalChars += pageChars;
+  }
+
+  const pagesText = selectedPages
+    .map(p => `### [[${p.name}]] — ${p.title}\n${p.content}`)
+    .join('\n\n---\n\n');
+
+  return `## Wiki Index
+${index}
+
+## Wiki Pages
+${pagesText}
+
+Distill these wiki pages into a compact context document${role ? ` for a ${role}` : ''}.`;
+}
