@@ -21,8 +21,22 @@
     "rag",
     "memex"
   ],
-  "author": "",
+  "author": "zelixag",
   "license": "MIT",
+  "homepage": "https://github.com/zelixag/ai-memex-cli#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zelixag/ai-memex-cli.git"
+  },
+  "bugs": {
+    "url": "https://github.com/zelixag/ai-memex-cli/issues"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md",
+    "LICENSE"
+  ],
   "dependencies": {
     "chalk": "^5.3.0",
     "commander": "^12.1.0",
