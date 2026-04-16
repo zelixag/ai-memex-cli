@@ -16,6 +16,7 @@ import { linkCheckCommand } from './commands/link-check.js';
 import { fetchCommand } from './commands/fetch.js';
 import { configCommand } from './commands/config.js';
 import { onboardCommand } from './commands/onboard.js';
+import { updateCommand } from './commands/update.js';
 
 const cli = cac('memex');
 
@@ -289,6 +290,21 @@ cli.command('install-hooks', 'Install memex as slash commands in your AI agent s
       dryRun: options.dryRun as boolean | undefined,
       projectDir: options.project as string | undefined,
     }, process.cwd());
+  });
+
+// ── Self-update ──────────────────────────────────────────────────────────────
+
+cli.command('update', 'Update memex to the latest version')
+  .option('--check', 'Only check for updates, do not install')
+  .option('--source <source>', 'Force update source: npm | github')
+  .example('memex update                    # auto-detect and update')
+  .example('memex update --check            # check for updates only')
+  .example('memex update --source github    # force update from GitHub')
+  .action(async (options: Record<string, unknown>) => {
+    await updateCommand({
+      check: options.check as boolean | undefined,
+      source: options.source as 'npm' | 'github' | undefined,
+    });
   });
 
 cli.help();
