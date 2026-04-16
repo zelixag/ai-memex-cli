@@ -11,19 +11,15 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400&family=Source+Sans+3:wght@300;400;500;600;700&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/ai-memex-cli/assets/index-BtUZAeZT.js"></script>
-    <link rel="stylesheet" crossorigin href="/ai-memex-cli/assets/index-D7OE_Wji.css">
-    
   </head>
 
   <body>
-    
-
     <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
     <script
       defer
-      src="https://manus-analytics.com/umami"
-      data-website-id="50c3fa96-cc58-4bb3-b128-9c0fca2b9434"></script>
+      src="%VITE_ANALYTICS_ENDPOINT%/umami"
+      data-website-id="%VITE_ANALYTICS_WEBSITE_ID%"></script>
   </body>
 
 </html>
