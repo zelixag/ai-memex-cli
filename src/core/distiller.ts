@@ -24,8 +24,8 @@ export function parseJsonlLines(raw: string): SessionLine[] {
         });
       }
     } catch {
-      // Not JSON — treat as plain text line
-      lines.push({ role: 'unknown', content: trimmed });
+      // Not valid JSON — skip this line
+      continue;
     }
   }
   return lines;

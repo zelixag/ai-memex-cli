@@ -19,11 +19,19 @@ export interface Frontmatter {
 }
 
 export function parseFrontmatter(content: string): { data: Partial<Frontmatter>; body: string } {
-  const parsed = matter(content);
-  return {
-    data: parsed.data as Partial<Frontmatter>,
-    body: parsed.content,
-  };
+  if (!content || typeof content !== 'string') {
+    return { data: {}, body: '' };
+  }
+  try {
+    const parsed = matter(content);
+    return {
+      data: parsed.data as Partial<Frontmatter>,
+      body: parsed.content,
+    };
+  } catch {
+    // Malformed frontmatter — return empty data and full content as body
+    return { data: {}, body: content };
+  }
 }
 
 export function stringifyFrontmatter(data: Partial<Frontmatter>, body: string): string {

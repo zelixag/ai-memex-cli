@@ -6,6 +6,7 @@ import { logger } from '../utils/logger.js';
 
 export interface StatusOptions {
   vault?: string;
+  json?: boolean;
 }
 
 export async function statusCommand(options: StatusOptions, cwd: string): Promise<void> {
@@ -22,6 +23,21 @@ export async function statusCommand(options: StatusOptions, cwd: string): Promis
     byType[page.type] = (byType[page.type] || 0) + 1;
   }
 
+  // ── JSON output ──────────────────────────────────────────────────────────────
+  if (options.json) {
+    const report = {
+      vault,
+      rawFiles: rawFiles.length,
+      wikiPages: wikiIndex.pages.length,
+      orphans: orphans.length,
+      byScene,
+      byType,
+    };
+    console.log(JSON.stringify(report, null, 2));
+    return;
+  }
+
+  // ── Human-readable output ──────────────────────────────────────────────────
   logger.info(`Vault: ${vault}`);
   logger.info(`Raw files pending: ${rawFiles.length}`);
   logger.info(`Wiki pages: ${wikiIndex.pages.length}`);

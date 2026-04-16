@@ -57,7 +57,17 @@ export async function configCommand(options: ConfigCommandOptions, cwd: string):
       await setConfig(options, cwd);
       break;
     default:
-      await listConfig(options, cwd);
+      if (!options.subcommand || !(options.subcommand as string).trim()) {
+        logger.info('Usage: memex config <subcommand>');
+        logger.info('  memex config list              Show current config');
+        logger.info('  memex config get <key>         Get a config value');
+        logger.info('  memex config set <key> <value> Set a config value');
+        logger.info('  memex config agents            List supported agents');
+      } else {
+        logger.error(`Unknown subcommand: "${options.subcommand}"`);
+        logger.info('Valid subcommands: list, get, set, agents');
+        logger.info('Usage: memex config <subcommand>');
+      }
   }
 }
 

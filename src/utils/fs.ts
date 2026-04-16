@@ -31,7 +31,7 @@ export function expandHome(p: string): string {
  * Always returns a POSIX-style string with forward slashes.
  */
 export function normalizePath(p: string, cwd?: string): string {
-  if (!p) return p;
+  if (!p) return (cwd ?? process.cwd()).replace(/\\/g, '/');
 
   // Step 1: convert ALL backslashes to forward slashes first
   // This handles Windows paths like ~\.llmwiki\global or C:\Users\...
@@ -83,6 +83,7 @@ export async function appendFileUtf8(path: string, content: string): Promise<voi
 }
 
 export async function pathExists(path: string): Promise<boolean> {
+  if (!path && path !== '.') return false;
   try {
     await access(normalizePath(path));
     return true;

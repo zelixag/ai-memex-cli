@@ -61,6 +61,24 @@ export async function fetchCommand(
   options: FetchCommandOptions,
   cwd: string
 ): Promise<void> {
+  // ── Input validation ──────────────────────────────────────────────────────
+  if (!target || typeof target !== 'string' || !target.trim()) {
+    logger.error('URL is required. Usage: memex fetch <url>');
+    logger.info('Example: memex fetch https://react.dev/reference/react/hooks');
+    logger.info('         memex fetch https://docs.anthropic.com --depth 2');
+    return;
+  }
+
+  const trimmedTarget = target.trim();
+  try {
+    new URL(trimmedTarget);
+  } catch {
+    logger.error(`Invalid URL: ${trimmedTarget}`);
+    logger.info('URL must start with http:// or https://');
+    logger.info('Example: memex fetch https://react.dev');
+    return;
+  }
+
   const vault = await resolveGlobalVaultPath({ explicitPath: options.vault }, cwd);
   const scene = options.scene ?? 'research';
   const rawDir = join(vault, 'raw', scene);

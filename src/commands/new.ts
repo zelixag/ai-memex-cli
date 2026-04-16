@@ -14,6 +14,23 @@ export interface NewOptions {
 }
 
 export async function newCommand(options: NewOptions, cwd: string): Promise<void> {
+  // ── Input validation ──────────────────────────────────────────────────────
+  const validTypes = ['entity', 'concept', 'source', 'summary'];
+  if (!options.name || !options.name.trim()) {
+    logger.error('Page name is required. Usage: memex new <type> <name>');
+    logger.info('Example: memex new concept "React Hooks"');
+    return;
+  }
+  if (!options.type || !validTypes.includes(options.type)) {
+    logger.error(`Invalid type: "${options.type || ''}". Must be one of: ${validTypes.join(', ')}`);
+    logger.info('Example: memex new entity "TypeScript"');
+    return;
+  }
+  // Default scene to research if not provided
+  if (!options.scene) {
+    options.scene = 'research' as WikiScene;
+  }
+
   const vault = await resolveVaultPath({ explicitPath: options.vault }, cwd);
   const id = toKebabCase(options.name);
   const typeDir = options.type === 'summary' ? 'summaries' :

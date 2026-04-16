@@ -10,6 +10,11 @@ export interface LogOptions {
 }
 
 export async function logCommand(options: LogOptions, cwd: string): Promise<void> {
+  if (!options.action || !options.action.trim()) {
+    logger.error('Action is required. Usage: memex log <action> <target>');
+    logger.info('Example: memex log ingest react-docs --note "Added from official docs"');
+    return;
+  }
   const vault = await resolveVaultPath({ explicitPath: options.vault }, cwd);
   const logPath = `${vault}/log.md`;
   const date = new Date().toISOString().split('T')[0];
