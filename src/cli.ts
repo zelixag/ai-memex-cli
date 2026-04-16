@@ -79,27 +79,38 @@ cli.command('config [...args]', 'Manage configuration  (list | set <key> <val> |
 
 // ── Content acquisition ───────────────────────────────────────────────────────
 
-cli.command('fetch <url>', 'Fetch web content into raw/ directory')
+cli.command('fetch <target>', 'Fetch web content or search keywords into raw/')
   .option('--scene <scene>', 'Scene: personal/research/reading/team', { default: 'research' })
   .option('--depth <depth>', 'Crawl depth (0=single page)', { default: 0 })
   .option('--max-pages <max>', 'Max pages to fetch', { default: 20 })
+  .option('--top <top>', 'Number of search results to show/fetch', { default: 5 })
+  .option('-y, --yes', 'Auto-confirm: skip selection, fetch top results')
   .option('--sitemap', 'Treat URL as sitemap.xml')
   .option('--include <pattern>', 'Only follow links matching regex pattern')
   .option('--exclude <pattern>', 'Skip links matching regex pattern')
   .option('--agent <agent>', 'Delegate to agent: claude-code | opencode | codex | gemini-cli')
   .option('--out <name>', 'Output filename stem (single page only)')
   .option('--dry-run', 'Print what would be fetched without doing it')
+  .option('--aggressive', 'Aggressive HTML cleaning', { default: true })
   .option('--vault <vault>', 'Vault path')
-  .action(async (url: string, options: Record<string, unknown>) => {
-    await fetchCommand(url, {
+  .example('memex fetch https://react.dev/reference/react/hooks')
+  .example('memex fetch "react hooks best practices"')
+  .example('memex fetch "Kubernetes 部署最佳实践" --top 3')
+  .example('memex fetch "OAuth2 PKCE flow" --agent claude-code')
+  .example('memex fetch "rust async" --yes                        # auto-fetch top results')
+  .action(async (target: string, options: Record<string, unknown>) => {
+    await fetchCommand(target, {
       scene: options.scene as any,
       depth: Number(options.depth),
       maxPages: Number(options.maxPages),
+      top: Number(options.top),
+      yes: options.yes as boolean | undefined,
       sitemap: options.sitemap as boolean | undefined,
       include: options.include as string | undefined,
       exclude: options.exclude as string | undefined,
       agent: options.agent as string | undefined,
       out: options.out as string | undefined,
+      aggressive: options.aggressive as boolean | undefined,
       dryRun: options.dryRun as boolean | undefined,
       vault: options.vault as string | undefined,
     }, process.cwd());

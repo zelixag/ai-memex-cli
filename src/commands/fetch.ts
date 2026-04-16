@@ -3,16 +3,27 @@
  *
  * `memex fetch` — Fetch web content into the vault's raw/ directory.
  *
- * Two modes:
- *   1. Built-in crawler (default) — CLI fetches directly, no agent needed
- *   2. Agent mode (--agent) — delegates to Claude Code / OpenCode / Codex
+ * Three modes:
+ *   1. URL mode (default) — direct URL, CLI fetches it
+ *   2. Search mode — fuzzy keyword, CLI searches web → shows results → fetches selected
+ *   3. Agent mode (--agent) — delegates to Agent for search + fetch
  *
  * Examples:
+ *   # Direct URL
  *   memex fetch https://react.dev/reference/react/hooks
+ *
+ *   # Keyword search (CLI searches, you pick)
+ *   memex fetch "react hooks best practices"
+ *   memex fetch "Kubernetes 部署最佳实践" --top 5
+ *   memex fetch "rust async runtime" --yes          # auto-fetch top result
+ *
+ *   # Agent search + fetch (agent does everything)
+ *   memex fetch "react server components" --agent claude-code
+ *   memex fetch "OAuth2 PKCE flow" --agent codex --top 3
+ *
+ *   # Crawl mode
  *   memex fetch https://docs.anthropic.com --depth 2 --scene research
  *   memex fetch https://example.com/sitemap.xml --sitemap
- *   memex fetch https://react.dev --agent claude-code
- *   memex fetch https://react.dev --agent opencode
  */
 
 import { resolveGlobalVaultPath } from '../core/vault.js';
@@ -25,11 +36,14 @@ import {
   type FetchOptions,
   type FetchResult,
 } from '../core/fetcher.js';
-import { writeFileUtf8, pathExists, normalizePath } from '../utils/fs.js';
+import { webSearch, isUrl, normalizeUrl, type SearchResult } from '../core/searcher.js';
+import { writeFileUtf8, normalizePath } from '../utils/fs.js';
 import { runCommand, commandExists } from '../utils/exec.js';
 import { logger } from '../utils/logger.js';
+import { resolveAgent, buildAgentArgs, type AgentId } from '../core/agent-adapter.js';
 import { readConfig } from '../core/config.js';
 import { join } from 'node:path';
+import { createInterface } from 'node:readline';
 
 export interface FetchCommandOptions {
   /** Scene to file under: personal/research/reading/team */
@@ -44,7 +58,7 @@ export interface FetchCommandOptions {
   include?: string;
   /** Skip links matching this regex pattern */
   exclude?: string;
-  /** Delegate to agent: claude-code | opencode | codex */
+  /** Delegate to agent */
   agent?: string;
   /** Output filename stem (without .md) */
   out?: string;
@@ -54,6 +68,10 @@ export interface FetchCommandOptions {
   dryRun?: boolean;
   /** Explicit vault path */
   vault?: string;
+  /** How many search results to show / fetch */
+  top?: number;
+  /** Auto-confirm: skip interactive selection, fetch top results */
+  yes?: boolean;
 }
 
 export async function fetchCommand(
@@ -63,33 +81,157 @@ export async function fetchCommand(
 ): Promise<void> {
   // ── Input validation ──────────────────────────────────────────────────────
   if (!target || typeof target !== 'string' || !target.trim()) {
-    logger.error('URL is required. Usage: memex fetch <url>');
-    logger.info('Example: memex fetch https://react.dev/reference/react/hooks');
-    logger.info('         memex fetch https://docs.anthropic.com --depth 2');
+    logger.error('Target is required. Usage: memex fetch <url-or-keywords>');
+    logger.info('');
+    logger.info('Examples:');
+    logger.info('  memex fetch https://react.dev/reference/react/hooks');
+    logger.info('  memex fetch "react hooks best practices"');
+    logger.info('  memex fetch "Kubernetes 部署" --agent claude-code');
     return;
   }
 
   const trimmedTarget = target.trim();
-  try {
-    new URL(trimmedTarget);
-  } catch {
-    logger.error(`Invalid URL: ${trimmedTarget}`);
-    logger.info('URL must start with http:// or https://');
-    logger.info('Example: memex fetch https://react.dev');
-    return;
-  }
-
   const vault = await resolveGlobalVaultPath({ explicitPath: options.vault }, cwd);
   const scene = options.scene ?? 'research';
   const rawDir = join(vault, 'raw', scene);
 
-  // ── Agent mode ──────────────────────────────────────────────────────────────
-  if (options.agent) {
-    await runAgentFetch(target, options, vault, rawDir, cwd);
+  // ── Detect mode: URL vs keyword search ────────────────────────────────────
+  if (isUrl(trimmedTarget)) {
+    // URL mode — existing behavior
+    const normalizedUrl = normalizeUrl(trimmedTarget);
+    if (options.agent) {
+      await runAgentFetch(normalizedUrl, options, vault, rawDir, cwd);
+    } else {
+      await runDirectFetch(normalizedUrl, options, rawDir);
+    }
+  } else {
+    // Keyword search mode
+    if (options.agent) {
+      await runAgentSearch(trimmedTarget, options, vault, rawDir, cwd);
+    } else {
+      await runKeywordSearch(trimmedTarget, options, rawDir);
+    }
+  }
+}
+
+// ── Keyword Search Mode (CLI built-in) ──────────────────────────────────────
+
+async function runKeywordSearch(
+  query: string,
+  options: FetchCommandOptions,
+  rawDir: string
+): Promise<void> {
+  const topN = options.top ?? 5;
+
+  logger.info(`Searching the web for: "${query}" ...`);
+
+  if (options.dryRun) {
+    logger.info(`[dry-run] Would search for: "${query}"`);
+    logger.info(`  top:    ${topN} results`);
+    logger.info(`  scene:  ${options.scene ?? 'research'}`);
+    logger.info(`  output: ${rawDir}/`);
+    logger.info(`  auto:   ${options.yes ? 'yes (fetch all)' : 'no (interactive)'}`);
     return;
   }
 
-  // ── Built-in crawler mode ────────────────────────────────────────────────────
+  let results: SearchResult[];
+  try {
+    results = await webSearch(query, topN);
+  } catch (e) {
+    logger.error(`Web search failed: ${e instanceof Error ? e.message : String(e)}`);
+    logger.info('Tip: Try using --agent to delegate search to your AI agent.');
+    logger.info('     memex fetch "your query" --agent claude-code');
+    return;
+  }
+
+  if (results.length === 0) {
+    logger.warn('No search results found.');
+    logger.info('Try different keywords or use --agent for AI-powered search.');
+    return;
+  }
+
+  // Display results
+  logger.info(`\nFound ${results.length} result(s):\n`);
+  results.forEach((r, i) => {
+    console.log(`  \x1b[36m[${i + 1}]\x1b[0m ${r.title}`);
+    console.log(`      \x1b[2m${r.url}\x1b[0m`);
+    if (r.snippet) {
+      console.log(`      ${r.snippet.slice(0, 120)}`);
+    }
+    console.log();
+  });
+
+  // Select which to fetch
+  let selectedIndices: number[];
+
+  if (options.yes) {
+    // Auto mode: fetch all results
+    selectedIndices = results.map((_, i) => i);
+    logger.info(`Auto-fetching all ${results.length} result(s)...`);
+  } else {
+    // Interactive mode: ask user
+    const answer = await askUser(
+      `Which results to fetch? (e.g. 1,3,5 or "all" or "none") [all]: `
+    );
+    const trimmed = answer.trim().toLowerCase();
+
+    if (trimmed === 'none' || trimmed === 'n' || trimmed === 'q') {
+      logger.info('Cancelled.');
+      return;
+    } else if (trimmed === '' || trimmed === 'all' || trimmed === 'a') {
+      selectedIndices = results.map((_, i) => i);
+    } else {
+      selectedIndices = trimmed
+        .split(/[,\s]+/)
+        .map((s) => parseInt(s, 10) - 1)
+        .filter((n) => !isNaN(n) && n >= 0 && n < results.length);
+
+      if (selectedIndices.length === 0) {
+        logger.warn('No valid selection. Cancelled.');
+        return;
+      }
+    }
+  }
+
+  // Fetch selected URLs
+  const selected = selectedIndices.map((i) => results[i]);
+  logger.info(`Fetching ${selected.length} page(s)...`);
+
+  const fetchOpts: FetchOptions = {
+    depth: 0,
+    aggressive: options.aggressive ?? true,
+  };
+
+  const written: string[] = [];
+  for (const result of selected) {
+    try {
+      const fetched = await fetchUrl(result.url, fetchOpts);
+      const stem = slugify(result.url);
+      const destPath = join(rawDir, `${stem}.md`);
+      const markdown = resultToMarkdown(fetched);
+      await writeFileUtf8(destPath, markdown);
+      written.push(destPath);
+      logger.info(`  ✓ ${fetched.title.slice(0, 60)} → ${stem}.md (${fetched.wordCount} words)`);
+    } catch (e) {
+      logger.warn(`  ✗ ${result.url}: ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  if (written.length > 0) {
+    logger.success(`Fetched ${written.length} page(s) to ${rawDir}/`);
+    logger.info('Next: run `memex ingest` to process into wiki pages.');
+  } else {
+    logger.warn('No pages were successfully fetched.');
+  }
+}
+
+// ── Direct URL Fetch (existing behavior) ────────────────────────────────────
+
+async function runDirectFetch(
+  url: string,
+  options: FetchCommandOptions,
+  rawDir: string
+): Promise<void> {
   const crawlOpts: FetchOptions = {
     depth: options.depth ?? 0,
     maxPages: options.maxPages ?? 20,
@@ -99,8 +241,8 @@ export async function fetchCommand(
   };
 
   if (options.dryRun) {
-    logger.info(`[dry-run] Would fetch: ${target}`);
-    logger.info(`  scene:    ${scene}`);
+    logger.info(`[dry-run] Would fetch: ${url}`);
+    logger.info(`  scene:    ${options.scene ?? 'research'}`);
     logger.info(`  depth:    ${crawlOpts.depth}`);
     logger.info(`  maxPages: ${crawlOpts.maxPages}`);
     logger.info(`  output:   ${rawDir}/`);
@@ -113,25 +255,21 @@ export async function fetchCommand(
   let results: FetchResult[] = [];
 
   if (options.sitemap) {
-    // Sitemap mode: parse XML, then fetch each URL
-    logger.info(`Parsing sitemap: ${target}`);
-    const urls = await parseSitemap(target);
+    logger.info(`Parsing sitemap: ${url}`);
+    const urls = await parseSitemap(url);
     const limit = options.maxPages ?? 20;
     logger.info(`Found ${urls.length} URLs, fetching up to ${limit}...`);
     const subset = urls.slice(0, limit);
     results = await fetchBatch(subset, crawlOpts);
   } else if ((crawlOpts.depth ?? 0) > 0) {
-    // Crawl mode
-    logger.info(`Crawling ${target} (depth=${crawlOpts.depth}, max=${crawlOpts.maxPages})...`);
-    results = await crawlSite(target, crawlOpts);
+    logger.info(`Crawling ${url} (depth=${crawlOpts.depth}, max=${crawlOpts.maxPages})...`);
+    results = await crawlSite(url, crawlOpts);
   } else {
-    // Single page
-    logger.info(`Fetching ${target}...`);
-    const result = await fetchUrl(target, crawlOpts);
+    logger.info(`Fetching ${url}...`);
+    const result = await fetchUrl(url, crawlOpts);
     results = [result];
   }
 
-  // Write results to raw/
   const written: string[] = [];
   for (const result of results) {
     const stem = options.out && results.length === 1
@@ -145,7 +283,102 @@ export async function fetchCommand(
   }
 
   logger.success(`Fetched ${written.length} page(s) to ${rawDir}/`);
-  logger.info(`Next: run \`memex ingest\` to process into wiki pages.`);
+  logger.info('Next: run `memex ingest` to process into wiki pages.');
+}
+
+// ── Agent Search + Fetch Mode ───────────────────────────────────────────────
+
+async function runAgentSearch(
+  query: string,
+  options: FetchCommandOptions,
+  vault: string,
+  rawDir: string,
+  cwd: string
+): Promise<void> {
+  const config = await readConfig(vault);
+  const agentId = (options.agent === 'true' || options.agent === '')
+    ? (config as any).agent ?? 'claude-code'
+    : options.agent!;
+
+  const resolved = await resolveAgent(agentId);
+  if (!resolved) {
+    logger.error(`Agent "${agentId}" not found or not installed.`);
+    logger.info('Run `memex config agents` to see available agents.');
+    return;
+  }
+
+  const topN = options.top ?? 5;
+  const prompt = buildAgentSearchPrompt(query, options, rawDir, topN);
+
+  if (options.dryRun) {
+    logger.info(`[dry-run] Would delegate search to ${resolved.id}:`);
+    logger.info(`  query: "${query}"`);
+    logger.info(`  top:   ${topN}`);
+    logger.info(`  scene: ${options.scene ?? 'research'}`);
+    logger.info('--- Agent Prompt ---');
+    console.log(prompt);
+    return;
+  }
+
+  logger.info(`Delegating search + fetch to ${resolved.profile.name}...`);
+  logger.info(`  Query: "${query}"`);
+  logger.info(`  Top ${topN} results → ${rawDir}/`);
+
+  const args = buildAgentArgs(resolved.profile, resolved.resolvedBin, prompt);
+
+  try {
+    const { stdout, stderr } = await runCommand(resolved.resolvedBin, args, { cwd });
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+    logger.success(`Agent search + fetch complete. Check ${rawDir}/ for results.`);
+    logger.info('Next: run `memex ingest` to process into wiki pages.');
+  } catch (e) {
+    logger.error(`Agent failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
+}
+
+// ── Agent Direct URL Fetch Mode ─────────────────────────────────────────────
+
+async function runAgentFetch(
+  url: string,
+  options: FetchCommandOptions,
+  vault: string,
+  rawDir: string,
+  cwd: string
+): Promise<void> {
+  const config = await readConfig(vault);
+  const agentId = (options.agent === 'true' || options.agent === '')
+    ? (config as any).agent ?? 'claude-code'
+    : options.agent!;
+
+  const resolved = await resolveAgent(agentId);
+  if (!resolved) {
+    logger.error(`Agent "${agentId}" not found or not installed.`);
+    logger.info('Run `memex config agents` to see available agents.');
+    return;
+  }
+
+  const prompt = buildAgentFetchPrompt(url, options, rawDir);
+
+  if (options.dryRun) {
+    logger.info(`[dry-run] Would delegate fetch to ${resolved.id}:`);
+    logger.info('--- Agent Prompt ---');
+    console.log(prompt);
+    return;
+  }
+
+  logger.info(`Delegating fetch to ${resolved.profile.name}...`);
+  const args = buildAgentArgs(resolved.profile, resolved.resolvedBin, prompt);
+
+  try {
+    const { stdout, stderr } = await runCommand(resolved.resolvedBin, args, { cwd });
+    if (stdout) process.stdout.write(stdout);
+    if (stderr) process.stderr.write(stderr);
+    logger.success(`Agent fetch complete. Check ${rawDir}/ for results.`);
+    logger.info('Next: run `memex ingest` to process into wiki pages.');
+  } catch (e) {
+    logger.error(`Agent fetch failed: ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 // ── Batch fetch helper ─────────────────────────────────────────────────────────
@@ -164,88 +397,87 @@ async function fetchBatch(urls: string[], opts: FetchOptions): Promise<FetchResu
   return results;
 }
 
-// ── Agent mode ────────────────────────────────────────────────────────────────
+// ── Interactive prompt helper ───────────────────────────────────────────────
 
-async function runAgentFetch(
-  target: string,
+function askUser(question: string): Promise<string> {
+  return new Promise((resolve) => {
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+// ── Prompt builders ─────────────────────────────────────────────────────────
+
+function buildAgentSearchPrompt(
+  query: string,
   options: FetchCommandOptions,
-  vault: string,
   rawDir: string,
-  cwd: string
-): Promise<void> {
-  const agentName = options.agent!;
-  const agentConfig = AGENT_CONFIGS[agentName];
+  topN: number
+): string {
+  const scene = options.scene ?? 'research';
 
-  if (!agentConfig) {
-    logger.error(`Unknown agent: ${agentName}`);
-    logger.info(`Supported agents: ${Object.keys(AGENT_CONFIGS).join(', ')}`);
-    return;
-  }
+  return `You are a research assistant. Your task is to search the web for relevant documentation and save it to the memex vault.
 
-  const bin = agentConfig.bin;
-  if (!(await commandExists(bin))) {
-    logger.error(`Agent "${agentName}" not found (command: ${bin})`);
-    logger.info(agentConfig.installHint);
-    return;
-  }
+## Search Query
 
-  const prompt = buildAgentFetchPrompt(target, options, rawDir);
+"${query}"
 
-  if (options.dryRun) {
-    logger.info(`[dry-run] Would run: ${bin} ${agentConfig.promptFlag} "<prompt>"`);
-    logger.info('--- Prompt ---');
-    console.log(prompt);
-    return;
-  }
+## Instructions
 
-  logger.info(`Delegating fetch to ${agentName}...`);
-  const args = agentConfig.buildArgs(prompt);
+1. Search the web for the query above. Use WebFetch, Bash (curl), or any available web tool.
+2. Find the top ${topN} most relevant, high-quality pages (prefer official docs, authoritative blogs, well-known sources).
+3. For each page:
+   a. Fetch the full page content.
+   b. Extract the main article content — strip navigation, headers, footers, ads, sidebars.
+   c. Convert to clean Markdown.
+   d. Save to: ${rawDir}/<slug>.md
 
-  try {
-    const { stdout, stderr } = await runCommand(bin, args, { cwd });
-    if (stdout) process.stdout.write(stdout);
-    if (stderr) process.stderr.write(stderr);
-    logger.success(`Agent fetch complete. Check ${rawDir}/ for results.`);
-    logger.info(`Next: run \`memex ingest\` to process into wiki pages.`);
-  } catch (e) {
-    logger.error(`Agent fetch failed: ${e instanceof Error ? e.message : String(e)}`);
-  }
+## Output Format
+
+Each file MUST have this YAML frontmatter:
+\`\`\`yaml
+---
+title: "<page title>"
+source-url: <exact URL fetched>
+fetched: <ISO 8601 timestamp>
+word-count: <approximate word count>
+search-query: "${query}"
+---
+\`\`\`
+
+## Naming Convention
+
+Filename slug: lowercase, hyphens, max 80 chars, derived from URL path or page title.
+
+## Scene
+
+All files go into: ${rawDir}/
+Scene: ${scene}
+
+## Quality Rules
+
+- Prefer official documentation over blog posts
+- Prefer recent content over outdated content
+- Preserve code blocks with correct language tags
+- Keep headings hierarchy (h1 → h2 → h3)
+- If a page is inaccessible, skip it and try the next result
+- Do NOT modify any existing files in the vault
+
+After saving all files, output a summary:
+- Total pages fetched
+- List of saved filenames with titles
+- Any pages that failed with reason
+`;
 }
-
-// ── Agent configurations ───────────────────────────────────────────────────────
-
-interface AgentConfig {
-  bin: string;
-  promptFlag: string;
-  installHint: string;
-  buildArgs: (prompt: string) => string[];
-}
-
-const AGENT_CONFIGS: Record<string, AgentConfig> = {
-  'claude-code': {
-    bin: 'claude',
-    promptFlag: '-p',
-    installHint: 'Install: npm install -g @anthropic-ai/claude-code',
-    buildArgs: (prompt) => ['-p', prompt, '--allowedTools', 'Bash,Read,Write,WebFetch'],
-  },
-  'opencode': {
-    bin: 'opencode',
-    promptFlag: 'run',
-    installHint: 'Install: npm install -g opencode-ai',
-    buildArgs: (prompt) => ['run', prompt],
-  },
-  'codex': {
-    bin: 'codex',
-    promptFlag: '-q',
-    installHint: 'Install: npm install -g @openai/codex',
-    buildArgs: (prompt) => ['-q', '--approval-mode', 'auto-edit', prompt],
-  },
-};
-
-// ── Prompt builder for agent mode ─────────────────────────────────────────────
 
 function buildAgentFetchPrompt(
-  target: string,
+  url: string,
   options: FetchCommandOptions,
   rawDir: string
 ): string {
@@ -271,7 +503,7 @@ function buildAgentFetchPrompt(
 
 ## Target
 
-URL: ${target}
+URL: ${url}
 
 ## Fetch Instructions
 
@@ -282,7 +514,7 @@ ${excludeNote}
 ## Output Requirements
 
 For each page you fetch:
-1. Use the WebFetch tool (or curl/wget via Bash) to retrieve the page HTML.
+1. Use WebFetch or Bash (curl/wget) to retrieve the page.
 2. Extract the main article content — strip navigation, headers, footers, ads, and sidebars.
 3. Convert the content to clean Markdown.
 4. Save to: ${rawDir}/<slug>.md
@@ -300,9 +532,6 @@ word-count: <approximate word count>
 ## Naming Convention
 
 Filename slug: lowercase, hyphens, max 80 chars, derived from URL path or page title.
-Examples:
-  - https://react.dev/reference/hooks → react-dev-reference-hooks.md
-  - https://docs.anthropic.com/claude/overview → anthropic-claude-overview.md
 
 ## Scene
 
