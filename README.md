@@ -25,14 +25,14 @@ While other tools attempt to solve this by running heavy background MCP servers 
 
 ### How it compares to alternatives
 
-| Feature | ai-memex-cli | SamurAIGPT/llm-wiki-agent | rohitg00/agentmemory | Pratiyush/llm-wiki |
-|---------|--------------|---------------------------|----------------------|--------------------|
-| **Architecture** | Node.js CLI + Agent Prompts | Pure Markdown Prompts | TypeScript MCP Server | Python Static Site Gen |
-| **Agent Support** | **Universal (8+ agents)** | Claude Code only | MCP-compatible only | Universal (via adapters) |
-| **Onboarding** | **Interactive Wizard** | Manual file copying | Complex server setup | CLI init command |
-| **Session Distillation** | **Yes (Role-based)** | No | Yes (Background) | Yes (JSONL to Markdown) |
-| **Web Fetching** | **Built-in crawler + Agent mode** | No | No | No |
-| **Slash Commands** | **Auto-generated for all agents** | Manual setup | N/A | N/A |
+| Feature | ai-memex-cli | atomicmemory/llm-wiki-compiler | ussumant/llm-wiki-compiler | SamurAIGPT/llm-wiki-agent | rohitg00/agentmemory |
+|---------|--------------|--------------------------------|----------------------------|---------------------------|----------------------|
+| **Architecture** | Stateless CLI + Agent Prompts | Standalone CLI (calls LLM API) | Claude Code Plugin | Pure Markdown Prompts | TypeScript MCP Server |
+| **Agent Support** | **Universal (8+ agents)** | Anthropic API only | Claude Code only | Claude Code only | MCP-compatible only |
+| **Web Fetching** | **Built-in crawler + Keyword search** | Single URL ingest | No | No | No |
+| **Session Distillation**| **Yes (Role-based)** | No | No | No | Yes (Background) |
+| **Slash Commands** | **Auto-generated for all agents** | No | Built-in (plugin) | Manual setup | N/A |
+| **Cost** | **Free (uses Agent's session)** | Requires API Key | Free (uses Claude session) | Free | Requires API Key |
 
 ---
 
