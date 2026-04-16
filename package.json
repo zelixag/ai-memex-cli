@@ -1,15 +1,17 @@
 {
   "name": "ai-memex-cli",
   "version": "0.1.0",
-  "description": "A CLI tool for building and managing LLM-powered persistent knowledge bases (Wiki) for AI agents like Claude Code",
+  "description": "CLI for building and maintaining persistent LLM wikis",
   "type": "module",
   "bin": {
-    "memex": "./bin/memex.js",
-    "ai-memex": "./bin/memex.js"
+    "memex": "./dist/cli.js"
   },
   "scripts": {
-    "dev": "node bin/memex.js",
-    "test": "node --experimental-vm-modules node_modules/.bin/jest"
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "prepublishOnly": "pnpm build"
   },
   "keywords": [
     "cli",
@@ -18,8 +20,8 @@
     "llm",
     "claude",
     "ai-agent",
-    "rag",
-    "memex"
+    "memex",
+    "persistent-memory"
   ],
   "author": "zelixag",
   "license": "MIT",
@@ -32,32 +34,23 @@
     "url": "https://github.com/zelixag/ai-memex-cli/issues"
   },
   "files": [
-    "bin/",
-    "src/",
+    "dist/",
+    "templates/",
     "README.md",
     "LICENSE"
   ],
   "dependencies": {
-    "chalk": "^5.3.0",
-    "commander": "^12.1.0",
-    "inquirer": "^9.3.7",
-    "marked": "^12.0.0",
-    "openai": "^4.77.0",
-    "ora": "^8.1.1",
-    "glob": "^11.0.0",
+    "cac": "^6.7.14",
+    "chokidar": "^4.0.0",
     "gray-matter": "^4.0.3",
-    "node-fetch": "^3.3.2",
-    "turndown": "^7.2.0",
-    "table": "^6.8.2",
-    "boxen": "^8.0.1",
-    "figures": "^6.1.0",
-    "conf": "^13.0.0",
-    "fs-extra": "^11.2.0",
-    "slugify": "^1.6.6",
-    "date-fns": "^3.6.0",
-    "tiktoken": "^1.0.17"
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.0.0"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

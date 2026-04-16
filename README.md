@@ -1,347 +1,270 @@
 # ai-memex-cli
 
-> A CLI tool for building LLM-powered persistent knowledge bases — giving AI agents like Claude Code a compounding, persistent memory.
+> CLI for building and maintaining persistent LLM wikis.
 
-[![npm version](https://badge.fury.io/js/ai-memex-cli.svg)](https://badge.fury.io/js/ai-memex-cli)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
----
-
-## The Problem
-
-Most AI agents start every session from zero. They have no memory of past decisions, no accumulated knowledge of your codebase conventions, and no awareness of the best practices your team has developed. You end up re-explaining context in every conversation, wasting tokens and getting inconsistent results.
-
-## The Solution
-
-`memex` builds a **persistent, compounding wiki** that sits between you and your AI agents. Instead of re-deriving knowledge on every query, an LLM incrementally builds and maintains a structured collection of markdown files. Every source you ingest makes the knowledge base richer. Every session distills new best practices. Your AI agents always start with the full context.
-
-This is inspired by [Vannevar Bush's Memex (1945)](https://en.wikipedia.org/wiki/Memex) — a personal knowledge store with associative trails. The missing piece in that vision was maintenance. LLMs provide that maintenance.
+Inspired by Karpathy's [LLM Wiki](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) pattern (Bush's Memex + LLM maintenance), `memex` provides **stateless primitives** that any agent (Claude Code, Codex, Cursor, etc.) can invoke to operate on a wiki.
 
 ---
 
-## Features
-
-- **`memex init`** — Initialize a knowledge base (general, engineering, research, or team)
-- **`memex ingest`** — Ingest files, URLs, or text; LLM automatically extracts and writes wiki pages
-- **`memex query`** — Ask questions; LLM synthesizes answers from the wiki with citations
-- **`memex lint`** — Health-check: find contradictions, orphan pages, stale claims
-- **`memex context`** — Generate a distilled context snapshot for AI agents
-- **`memex sync`** — Sync context to `CLAUDE.md`, `.cursorrules`, or Copilot instructions
-- **`memex distill`** — Distill best practices from conversation logs by role
-- **`memex list`** — Browse wiki pages with tags and metadata
-- **`memex kb`** — Manage multiple knowledge bases
-- **`memex config`** — Configure LLM provider, model, and API keys
-
----
-
-## Installation
-
-```bash
-npm install -g ai-memex-cli
-```
-
-Or run directly with npx:
-
-```bash
-npx ai-memex-cli init my-kb
-```
-
-### Requirements
-
-- Node.js 18+
-- An OpenAI-compatible API key (OpenAI, Anthropic via proxy, Ollama, etc.)
-
----
-
-## Quick Start
-
-### 1. Initialize a knowledge base
-
-```bash
-# In your project directory
-memex init my-engineering-kb --type engineering
-```
-
-This creates:
-```
-.
-├── AGENTS.md          # Schema and conventions for LLM agents
-├── wiki/              # LLM-maintained wiki pages
-│   ├── index.md       # Master index
-│   ├── log.md         # Append-only operation log
-│   └── ...            # Subdirectories by type
-└── sources/           # Immutable raw source documents
-```
-
-### 2. Configure your LLM
-
-```bash
-memex config setup
-# or set environment variables:
-export OPENAI_API_KEY=sk-...
-export MEMEX_MODEL=gpt-4.1-mini  # optional, defaults to gpt-4.1-mini
-```
-
-### 3. Ingest knowledge
-
-```bash
-# Ingest a file
-memex ingest ./docs/architecture.md
-
-# Ingest a URL
-memex ingest https://example.com/tech-blog-post
-
-# Batch ingest (less interactive)
-memex ingest ./meeting-notes.md --batch
-```
-
-The LLM reads the source, extracts key information, and writes/updates wiki pages automatically.
-
-### 4. Query the knowledge base
-
-```bash
-memex query "What is our API authentication strategy?"
-memex query "What are the database migration conventions?" --save
-```
-
-### 5. Generate context for AI agents
-
-```bash
-# Generate context for Claude Code
-memex context --role backend-engineer --output CLAUDE.md
-
-# Or use sync to write to multiple agent configs
-memex sync --target claude,cursor --role backend-engineer
-```
-
-### 6. Distill best practices from sessions
-
-```bash
-# After a productive Claude Code session, distill the learnings
-memex distill ./session-transcript.md --role backend-engineer
-```
-
----
-
-## Knowledge Base Types
-
-| Type | Best For | Wiki Structure |
-|------|----------|----------------|
-| `general` | Personal knowledge, reading notes | concepts/, entities/, syntheses/ |
-| `engineering` | Codebases, team wikis, ADRs | architecture/, best-practices/, decisions/, runbooks/ |
-| `research` | Literature review, papers | papers/, concepts/, authors/, syntheses/ |
-| `team` | Meeting notes, processes, decisions | decisions/, processes/, meetings/, people/ |
-
----
-
-## Commands Reference
-
-### `memex init [name]`
-
-Initialize a new knowledge base.
-
-```bash
-memex init my-kb                          # Interactive setup
-memex init my-kb --type engineering       # Engineering KB
-memex init my-kb --type research          # Research KB
-memex init my-kb --dir /path/to/dir       # Custom directory
-```
-
-### `memex ingest <source>`
-
-Ingest a new knowledge source.
-
-```bash
-memex ingest ./document.md                # Local file
-memex ingest https://example.com/article  # URL
-memex ingest "Key insight: ..."           # Inline text
-memex ingest ./doc.md --batch             # Batch mode (no discussion)
-memex ingest ./doc.md --no-discuss        # Skip discussion step
-memex ingest ./doc.md --kb my-other-kb   # Target specific KB
-```
-
-### `memex query "<question>"`
-
-Query the knowledge base.
-
-```bash
-memex query "What are our API conventions?"
-memex query "Compare approach A vs B" --format table
-memex query "Summarize the architecture" --save    # Save answer as wiki page
-```
-
-### `memex lint`
-
-Health-check the knowledge base.
-
-```bash
-memex lint                    # Full health check
-memex lint --fix              # Attempt auto-fix
-```
-
-Checks for:
-- Orphan pages (no inbound links)
-- Missing frontmatter
-- Contradictions between pages (LLM-powered)
-- Stale claims
-- Missing cross-references
-
-### `memex context`
-
-Generate distilled context for AI agents.
-
-```bash
-memex context                              # General context (stdout)
-memex context --role backend-engineer      # Role-specific context
-memex context --output CLAUDE.md           # Save to file
-memex context --max-tokens 4000            # Limit token budget
-```
-
-Supported roles: `backend-engineer`, `frontend-engineer`, `tech-lead`, `devops`, `researcher`, `full-stack`
-
-### `memex sync`
-
-Sync context to AI agent config files.
-
-```bash
-memex sync                                 # Interactive target selection
-memex sync --target claude                 # Sync to CLAUDE.md
-memex sync --target claude,cursor          # Multiple targets
-memex sync --role tech-lead --target claude
-```
-
-Supported targets:
-- `claude` → `CLAUDE.md` (Claude Code)
-- `cursor` → `.cursorrules` (Cursor)
-- `copilot` → `.github/copilot-instructions.md` (GitHub Copilot)
-- `aider` → `CONVENTIONS.md` (Aider)
-
-### `memex distill <source>`
-
-Distill best practices from conversation logs.
-
-```bash
-memex distill ./session.md --role backend-engineer
-memex distill ./meeting-notes.txt --role tech-lead
-```
-
-### `memex list`
-
-List wiki pages.
-
-```bash
-memex list                    # All pages
-memex list --tag architecture # Filter by tag
-memex list --orphans          # Show only orphan pages
-```
-
-### `memex kb`
-
-Manage multiple knowledge bases.
-
-```bash
-memex kb list                 # List all KBs
-memex kb switch my-other-kb   # Switch default KB
-memex kb info my-kb           # Show KB details
-memex kb delete old-kb        # Remove from registry
-```
-
-### `memex config`
-
-Configure memex settings.
-
-```bash
-memex config list             # Show all settings
-memex config setup            # Interactive setup
-memex config set llm.model gpt-4o
-memex config set llm.apiKey sk-...
-memex config get llm.model
-```
-
----
-
-## Workflow: Claude Code Integration
-
-The primary use case is giving Claude Code persistent memory across sessions.
-
-### Setup (once per project)
-
-```bash
-# In your project root
-memex init --type engineering
-
-# Ingest your existing docs
-memex ingest ./docs/architecture.md
-memex ingest ./docs/api-conventions.md
-memex ingest https://your-internal-wiki.com/decisions
-
-# Generate and sync context
-memex sync --target claude --role backend-engineer
-```
-
-### During development
-
-After a productive Claude Code session where you made important decisions:
-
-```bash
-# Save the session transcript (Claude Code exports these)
-memex distill ./session-2026-04-15.md --role backend-engineer
-
-# Re-sync to update CLAUDE.md
-memex sync --target claude --role backend-engineer
-```
-
-### Periodic maintenance
-
-```bash
-# Weekly health check
-memex lint
-
-# After adding new docs
-memex ingest ./new-adr.md
-memex sync --target claude
-```
+## Why
+
+1. **Persistent memory for AI agents** — a structured wiki that persists across sessions, no more starting from zero every conversation.
+2. **Session distillation** — extract best practices, decisions, and insights from coding sessions into reusable knowledge.
+3. **Precise context injection** — domain knowledge processed into compact, token-efficient context for every conversation.
 
 ---
 
 ## Architecture
 
 ```
-Knowledge Base
-├── AGENTS.md              ← Schema: tells LLMs how to work with this KB
-├── wiki/                  ← LLM-maintained (you read, LLM writes)
-│   ├── index.md           ← Master catalog with summaries
-│   ├── log.md             ← Append-only operation log
-│   └── [type-dirs]/       ← Organized by KB type
-└── sources/               ← Immutable raw sources (you add, LLM reads)
+┌─────────────────────────────────────────────────┐
+│ Layer 3: Agent (Claude Code / any LLM agent)    │
+│  - Ingest, write wiki pages, fix lint issues    │
+│  - Update per-project AGENTS.md                 │
+│  - Invoke memex commands via Bash               │
+└─────────────────────────────────────────────────┘
+                       ↕ (shell + JSON)
+┌─────────────────────────────────────────────────┐
+│ Layer 2: memex CLI                              │
+│  - Stateless primitives: init / distill / glob  │
+│    / ingest / watch / inject / lint / search    │
+│    / new / log / install-hooks / status         │
+│  - No LLM API calls (except claude -p in        │
+│    distill and ingest orchestration)            │
+└─────────────────────────────────────────────────┘
+                       ↕ (fs)
+┌─────────────────────────────────────────────────┐
+│ Layer 1: Vault (filesystem)                     │
+│  ~/.llmwiki/global/    ← CLI-managed source     │
+│  <project>/.llmwiki/local/  ← agent projection  │
+└─────────────────────────────────────────────────┘
 ```
 
-The three-layer architecture:
-1. **Raw sources** — Immutable. LLM reads but never modifies.
-2. **Wiki** — LLM-maintained markdown. You read; LLM writes.
-3. **Schema (AGENTS.md)** — Conventions and workflows. You and LLM co-evolve.
+**Key principle:** CLI manages mechanical correctness; agent manages semantic correctness.
 
 ---
 
-## Environment Variables
+## Install
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `OPENAI_API_KEY` | API key for LLM provider | — |
-| `OPENAI_BASE_URL` | Custom API base URL | OpenAI default |
-| `MEMEX_MODEL` | Model name override | `gpt-4.1-mini` |
-| `MEMEX_MOCK` | Set to `1` for mock mode (testing) | — |
+```bash
+npm install -g ai-memex-cli
+```
+
+Requires Node.js 20+.
 
 ---
 
-## Tips
+## Quick Start
 
-- Keep `AGENTS.md` updated as your conventions evolve — it's the LLM's operating manual
-- Use `--batch` flag for ingesting many sources quickly
-- Save valuable query answers with `--save` to build up syntheses
-- Run `memex lint` weekly to keep the wiki healthy
-- The wiki is just a git repo — commit it for version history and collaboration
-- Use `memex context --role <role>` to generate role-specific context for different team members
+```bash
+# 1. Initialize a global vault
+memex init
+
+# 2. Create wiki pages
+memex new concept "React Hooks" --scene research
+memex new entity "TypeScript" --scene research
+
+# 3. Drop a source document and ingest it
+cp my-notes.md ~/.llmwiki/global/raw/research/
+memex ingest ~/.llmwiki/global/raw/research/my-notes.md
+
+# 4. Check wiki health
+memex lint --json
+
+# 5. Search the wiki
+memex search "hooks" --json
+
+# 6. Project relevant pages into a local vault
+memex glob --project . --keywords "react,typescript"
+
+# 7. Output context for an agent
+memex inject --keywords "react"
+
+# 8. Install Claude Code hooks for automatic distill/glob
+memex install-hooks --agent claude-code
+```
+
+---
+
+## Commands
+
+### Core Commands
+
+| Command | Who Calls | Description |
+|---------|-----------|-------------|
+| `memex init [path] --scope global\|local` | **user** | Initialize vault + AGENTS.md template |
+| `memex distill <session.jsonl> [--no-llm]` | **SessionEnd hook / user** | Distill session JSONL to raw markdown (calls `claude -p`) |
+| `memex ingest <raw-file\|--all> [--dry-run]` | **user / hook / watch** | Orchestrate agent to ingest raw source into wiki |
+| `memex watch [--daemon]` | **user / daemon** | Watch raw/ for changes and auto-ingest |
+| `memex glob --project <dir> [--keywords]` | **SessionStart hook / user** | Project relevant global wiki pages into local vault |
+| `memex inject [--keywords\|--task] [--format md\|json]` | **agent / user** | Output wiki context for agent consumption |
+| `memex lint [--json] [--check orphans,broken-links,missing-frontmatter]` | **agent / periodic hook** | Scan wiki health and output structured report |
+| `memex search <query> [--engine ripgrep\|qmd\|hybrid]` | **agent** | Search wiki pages |
+| `memex new <type> <name> --scene` | **agent** | Scaffold a new wiki page from template |
+| `memex log <action> [--target] [--note]` | **agent** | Append a formatted entry to log.md |
+| `memex install-hooks [--agent claude-code]` | **user** | Install SessionStart/SessionEnd hooks |
+
+### Utility Commands
+
+| Command | Who Calls | Description |
+|---------|-----------|-------------|
+| `memex status` | **user** | Vault overview: pending raw, wiki count, orphans, breakdown by scene/type |
+| `memex link-check [--fix]` | **agent / user** | Validate `[[links]]` and suggest fixes |
+
+---
+
+## Vault Structure
+
+### Global Vault (`~/.llmwiki/global/`)
+
+```
+├── .llmwiki/
+│   └── config.json
+├── raw/
+│   ├── personal/
+│   ├── research/
+│   ├── reading/
+│   ├── team/
+│   └── sessions/
+├── wiki/
+│   ├── personal/{entities,concepts,sources,summaries}/
+│   ├── research/{entities,concepts,sources,summaries}/
+│   ├── reading/{entities,concepts,sources,summaries}/
+│   └── team/{entities,concepts,sources,summaries}/
+├── AGENTS.md
+├── index.md
+└── log.md
+```
+
+### Local Vault (`<project>/.llmwiki/local/`)
+
+```
+├── wiki/          ← copied from global by `glob`
+└── AGENTS.md      ← project-level schema with @includes
+```
+
+---
+
+## Data Flow
+
+```
+agent session running
+  │
+  ▼ SessionEnd hook
+memex distill <session.jsonl>  →  global/raw/sessions/session-YYYY-MM-DD.md
+  │
+  ▼ user trigger / watch / manual
+memex ingest <raw-file>  →  (shells claude -p per AGENTS.md schema)
+  → updates global/wiki/*.md, index.md, log.md
+  │
+  ▼ periodic / manual
+memex lint --json  →  agent consumes report and fixes wiki
+  │
+  ▼ SessionStart hook
+memex glob --project <cwd>  →  <project>/.llmwiki/local/wiki/
+local AGENTS.md @includes local wiki pages
+  │
+  ▼ agent starts new session with precise context
+```
+
+---
+
+## Page Format
+
+All wiki pages use YAML frontmatter:
+
+```yaml
+---
+name: React Hooks
+description: Modern state management in React
+type: concept
+scene: research
+tags: [react, frontend, hooks]
+updated: 2026-04-16
+related: [[react-state-management]]
+sources: [react-docs-2026]
+---
+```
+
+**Types:** `entity` | `concept` | `source` | `summary`
+
+**Scenes:** `personal` | `research` | `reading` | `team`
+
+**Links:** Use `[[page-name]]` for internal cross-references.
+
+---
+
+## Vault Resolution
+
+Commands resolve the vault in this order:
+
+1. `--vault <path>` argument
+2. Nearest `.llmwiki/local` (upward traversal from cwd)
+3. Nearest `.llmwiki/global` (upward traversal from cwd)
+4. Fallback: `~/.llmwiki/global`
+
+---
+
+## @include Syntax (Local AGENTS.md)
+
+```markdown
+## @include ../global/wiki/frontend-engineering.md
+## @include ./wiki/session-2026-04-15.md
+## @include ./wiki/*.md
+```
+
+`memex inject` parses these lines, reads files, and concatenates the output.
+
+---
+
+## Claude Code Integration
+
+### Setup (once)
+
+```bash
+# Initialize global vault
+memex init
+
+# Install hooks
+memex install-hooks --agent claude-code
+
+# This configures:
+#   SessionStart → memex glob --project .
+#   SessionEnd   → memex distill ~/.claude/sessions/last-session.jsonl
+```
+
+### Workflow
+
+1. **SessionStart** → `memex glob` copies relevant wiki pages into `.llmwiki/local/`
+2. **Agent reads** local AGENTS.md with `@include` directives for context
+3. **Agent works** on the project, making decisions and writing code
+4. **SessionEnd** → `memex distill` extracts key insights into `raw/sessions/`
+5. **User triggers** `memex ingest` to process raw sessions into wiki pages
+6. **Next session** starts with richer context
+
+---
+
+## Tech Stack
+
+- **Runtime:** Node.js 20+
+- **Language:** TypeScript 5.4+
+- **CLI Framework:** cac
+- **Testing:** vitest
+- **Dependencies:** gray-matter, chokidar, picocolors
+
+---
+
+## Development
+
+```bash
+git clone https://github.com/zelixag/ai-memex-cli.git
+cd ai-memex-cli
+pnpm install
+pnpm build
+pnpm test:run
+```
 
 ---
 
