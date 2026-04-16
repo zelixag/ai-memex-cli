@@ -32,11 +32,11 @@ cli.command('distill <input>', 'Distill session JSONL to raw markdown')
     await distillCommand({ input, out: options.out as string | undefined, noLlm: !options.llm, vault: options.vault as string | undefined }, process.cwd());
   });
 
-cli.command('ingest <target>', 'Ingest a raw file into wiki (shells to agent)')
+cli.command('ingest [target]', 'Ingest raw files into wiki (shells to agent). Defaults to ~/.llmwiki/global/raw/')
   .option('--no-llm', 'Skip LLM agent')
   .option('--dry-run', 'Print prompt only')
   .option('--vault <vault>', 'Vault path')
-  .action(async (target: string, options: Record<string, unknown>) => {
+  .action(async (target: string | undefined, options: Record<string, unknown>) => {
     await ingestCommand({ target, noLlm: !options.llm, dryRun: options.dryRun as boolean | undefined, vault: options.vault as string | undefined }, process.cwd());
   });
 

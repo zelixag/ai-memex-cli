@@ -1,12 +1,13 @@
 import { resolveGlobalVaultPath } from '../core/vault.js';
-import { readFileUtf8, writeFileUtf8, pathExists, listMarkdownFiles } from '../utils/fs.js';
+import { readFileUtf8, pathExists, listMarkdownFiles, normalizePath, defaultRawDir } from '../utils/fs.js';
 import { logger } from '../utils/logger.js';
 import { runCommand, commandExists } from '../utils/exec.js';
 import { readConfig } from '../core/config.js';
-import { basename } from 'node:path';
+import { basename, join } from 'node:path';
 
 export interface IngestOptions {
-  target: string;
+  /** File path, directory path, or omit to default to ~/.llmwiki/global/raw */
+  target?: string;
   noLlm?: boolean;
   dryRun?: boolean;
   vault?: string;
@@ -16,47 +17,67 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
   const vault = await resolveGlobalVaultPath({ explicitPath: options.vault }, cwd);
   const config = await readConfig(vault);
 
-  // Resolve target files
+  // ── Resolve target ────────────────────────────────────────────────────────
   let targetFiles: string[] = [];
-  if (options.target === '--all') {
-    targetFiles = await listMarkdownFiles(`${vault}/raw`);
+
+  // Default: no argument → ingest everything in vault's raw/
+  if (!options.target) {
+    const rawDir = join(vault, 'raw').replace(/\\/g, '/');
+    targetFiles = await listMarkdownFiles(rawDir);
     if (targetFiles.length === 0) {
-      logger.info('No raw files to ingest.');
+      logger.info(`No raw files found in ${rawDir}`);
+      logger.info('Use `memex fetch <url>` to add content, or drop .md files into raw/');
       return;
     }
-    logger.info(`Found ${targetFiles.length} raw file(s) to ingest.`);
+    logger.info(`Found ${targetFiles.length} raw file(s) in ${rawDir}`);
   } else {
-    const targetPath = options.target.startsWith('/') ? options.target : `${cwd}/${options.target}`;
-    if (!(await pathExists(targetPath))) {
-      logger.error(`Target file not found: ${targetPath}`);
+    // Normalize the provided path (handles ~, backslashes, relative paths)
+    const normalized = normalizePath(options.target, cwd);
+
+    if (!(await pathExists(normalized))) {
+      logger.error(`Path not found: ${normalized}`);
+      logger.info('Tip: omit the argument to ingest all files in ~/.llmwiki/global/raw/');
       return;
     }
-    targetFiles = [targetPath];
+
+    // Check if it's a directory or a file
+    const { stat } = await import('node:fs/promises');
+    const info = await stat(normalized);
+
+    if (info.isDirectory()) {
+      targetFiles = await listMarkdownFiles(normalized);
+      if (targetFiles.length === 0) {
+        logger.info(`No .md files found in ${normalized}`);
+        return;
+      }
+      logger.info(`Found ${targetFiles.length} file(s) in ${normalized}`);
+    } else {
+      targetFiles = [normalized];
+    }
   }
 
-  // Read AGENTS.md for schema
-  const agentsPath = `${vault}/AGENTS.md`;
+  // ── Read vault schema ─────────────────────────────────────────────────────
+  const agentsPath = join(vault, 'AGENTS.md').replace(/\\/g, '/');
   if (!(await pathExists(agentsPath))) {
-    logger.error('No AGENTS.md found in vault. Run `memex init` first.');
+    logger.error(`No AGENTS.md found in vault: ${vault}`);
+    logger.info('Run `memex init` first.');
     return;
   }
   const agentsContent = await readFileUtf8(agentsPath);
 
-  // Read current index.md for context
-  const indexPath = `${vault}/index.md`;
+  const indexPath = join(vault, 'index.md').replace(/\\/g, '/');
   const indexContent = (await pathExists(indexPath)) ? await readFileUtf8(indexPath) : '';
 
+  // ── Process each file ─────────────────────────────────────────────────────
   for (const file of targetFiles) {
     const sourceContent = await readFileUtf8(file);
     const sourceName = basename(file);
-
-    // Build the prompt for the agent
     const prompt = buildIngestPrompt(agentsContent, indexContent, sourceContent, sourceName, vault);
 
     if (options.dryRun) {
-      console.log('--- DRY RUN: Prompt that would be sent to agent ---');
+      logger.info(`--- DRY RUN: ${sourceName} ---`);
       console.log(prompt);
-      console.log('--- END DRY RUN ---');
+      logger.info(`--- END DRY RUN ---`);
       continue;
     }
 
@@ -72,7 +93,7 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
     if (!(await commandExists(agentBin))) {
       logger.error(`Agent command "${agentBin}" not found.`);
       logger.info('Install Claude Code CLI: npm install -g @anthropic-ai/claude-code');
-      logger.info('Or use --dry-run to see the prompt.');
+      logger.info('Or use --dry-run to preview the prompt.');
       return;
     }
 
@@ -81,8 +102,8 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
       const { stdout, stderr } = await runCommand(agentBin, [...agentParts.slice(1), prompt], {
         cwd: vault,
       });
-      if (stdout) console.log(stdout);
-      if (stderr) console.error(stderr);
+      if (stdout) process.stdout.write(stdout);
+      if (stderr) process.stderr.write(stderr);
       logger.success(`Ingested ${sourceName}`);
     } catch (e) {
       logger.error(`Failed to ingest ${sourceName}: ${e instanceof Error ? e.message : String(e)}`);

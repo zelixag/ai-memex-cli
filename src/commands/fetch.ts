@@ -25,7 +25,7 @@ import {
   type FetchOptions,
   type FetchResult,
 } from '../core/fetcher.js';
-import { writeFileUtf8, pathExists } from '../utils/fs.js';
+import { writeFileUtf8, pathExists, normalizePath } from '../utils/fs.js';
 import { runCommand, commandExists } from '../utils/exec.js';
 import { logger } from '../utils/logger.js';
 import { readConfig } from '../core/config.js';
