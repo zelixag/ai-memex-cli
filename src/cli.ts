@@ -13,6 +13,7 @@ import { logCommand } from './commands/log.js';
 import { installHooksCommand } from './commands/install-hooks.js';
 import { statusCommand } from './commands/status.js';
 import { linkCheckCommand } from './commands/link-check.js';
+import { fetchCommand } from './commands/fetch.js';
 
 const cli = cac('memex');
 
@@ -165,6 +166,34 @@ cli.command('link-check', 'Validate wiki links')
   .action(async (options: Record<string, unknown>) => {
     await linkCheckCommand({
       fix: options.fix as boolean | undefined,
+      vault: options.vault as string | undefined,
+    }, process.cwd());
+  });
+
+cli.command('fetch <url>', 'Fetch web content into raw/ directory')
+  .option('--scene <scene>', 'Scene: personal/research/reading/team', { default: 'research' })
+  .option('--depth <depth>', 'Crawl depth (0=single page)', { default: 0 })
+  .option('--max-pages <max>', 'Max pages to fetch', { default: 20 })
+  .option('--sitemap', 'Treat URL as sitemap.xml')
+  .option('--include <pattern>', 'Only follow links matching regex pattern')
+  .option('--exclude <pattern>', 'Skip links matching regex pattern')
+  .option('--agent <agent>', 'Delegate to agent: claude-code | opencode | codex')
+  .option('--out <name>', 'Output filename stem (single page only)')
+  .option('--aggressive', 'Aggressive HTML cleaning', { default: true })
+  .option('--dry-run', 'Print what would be fetched without doing it')
+  .option('--vault <vault>', 'Vault path')
+  .action(async (url: string, options: Record<string, unknown>) => {
+    await fetchCommand(url, {
+      scene: options.scene as any,
+      depth: Number(options.depth),
+      maxPages: Number(options.maxPages),
+      sitemap: options.sitemap as boolean | undefined,
+      include: options.include as string | undefined,
+      exclude: options.exclude as string | undefined,
+      agent: options.agent as string | undefined,
+      out: options.out as string | undefined,
+      aggressive: options.aggressive as boolean | undefined,
+      dryRun: options.dryRun as boolean | undefined,
       vault: options.vault as string | undefined,
     }, process.cwd());
   });
