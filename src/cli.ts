@@ -15,8 +15,23 @@ import { statusCommand } from './commands/status.js';
 import { linkCheckCommand } from './commands/link-check.js';
 import { fetchCommand } from './commands/fetch.js';
 import { configCommand } from './commands/config.js';
+import { onboardCommand } from './commands/onboard.js';
 
 const cli = cac('memex');
+
+// ── Onboarding ───────────────────────────────────────────────────────────────
+
+cli.command('onboard', 'Interactive setup wizard — choose agent, configure vault & hooks')
+  .option('--agent <agent>', 'Pre-select agent (skip prompt)')
+  .option('-y, --yes', 'Accept all defaults (non-interactive)')
+  .example('memex onboard')
+  .example('memex onboard --agent claude-code -y')
+  .action(async (options: Record<string, unknown>) => {
+    await onboardCommand({
+      agent: options.agent as string | undefined,
+      yes: options.yes as boolean | undefined,
+    }, process.cwd());
+  });
 
 // ── Vault management ──────────────────────────────────────────────────────────
 
@@ -93,10 +108,13 @@ cli.command('distill [input]', 'Distill a session (JSONL/text) into a raw wiki d
   .option('--out <out>', 'Output path')
   .option('--role <role>', 'Role to extract best practices for (e.g., backend-engineer)')
   .option('--agent <agent>', 'AI agent: claude-code | codex | opencode | gemini-cli | aider')
+  .option('--latest', 'Auto-discover the most recent session from agent session directory')
   .option('--no-llm', 'Mechanical extraction only (requires concrete file path)')
   .option('--dry-run', 'Print prompt only')
   .option('--vault <vault>', 'Vault path')
   .example('memex distill session.jsonl')
+  .example('memex distill --latest                              # auto-find latest session')
+  .example('memex distill --latest --role backend-engineer      # distill with role')
   .example('memex distill .\\sessions\\today.jsonl --role backend-engineer')
   .example('memex distill --agent codex')
   .action(async (input: string | undefined, options: Record<string, unknown>) => {
@@ -105,6 +123,7 @@ cli.command('distill [input]', 'Distill a session (JSONL/text) into a raw wiki d
       out: options.out as string | undefined,
       role: options.role as string | undefined,
       agent: options.agent as string | undefined,
+      latest: options.latest as boolean | undefined,
       noLlm: !options.llm,
       dryRun: options.dryRun as boolean | undefined,
       vault: options.vault as string | undefined,

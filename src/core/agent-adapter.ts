@@ -59,6 +59,21 @@ export interface AgentProfile {
   headless: boolean;
   /** Short description */
   description: string;
+  /**
+   * Session directory path relative to user home (~).
+   * Where this agent stores conversation/session data.
+   * Uses forward slashes; resolved at runtime with os.homedir().
+   */
+  sessionDir?: string;
+  /**
+   * Glob pattern to match session files inside sessionDir.
+   * e.g. '** / *.jsonl' or '** / *.json'
+   */
+  sessionPattern?: string;
+  /**
+   * Human-readable description of session location for onboard display.
+   */
+  sessionHint?: string;
 }
 
 export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
@@ -72,6 +87,9 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
     installHint: 'npm install -g @anthropic-ai/claude-code',
     headless: true,
     description: 'Anthropic Claude Code CLI agent',
+    sessionDir: '.claude/projects',
+    sessionPattern: '**/*.jsonl',
+    sessionHint: '~/.claude/projects/<project>/*.jsonl',
   },
   'codex': {
     name: 'OpenAI Codex',
@@ -83,6 +101,9 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
     installHint: 'npm install -g @openai/codex',
     headless: true,
     description: 'OpenAI Codex CLI agent',
+    sessionDir: '.codex/sessions',
+    sessionPattern: '**/*.json',
+    sessionHint: '~/.codex/sessions/*.json',
   },
   'opencode': {
     name: 'OpenCode',
@@ -94,6 +115,9 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
     installHint: 'npm install -g opencode-ai  (or: curl ... | sh)',
     headless: true,
     description: 'OpenCode AI coding agent',
+    sessionDir: '.opencode/sessions',
+    sessionPattern: '**/*.jsonl',
+    sessionHint: '~/.opencode/sessions/*.jsonl',
   },
   'cursor': {
     name: 'Cursor',
@@ -117,6 +141,9 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
     installHint: 'npm install -g @google/gemini-cli',
     headless: true,
     description: 'Google Gemini CLI agent',
+    sessionDir: '.gemini/sessions',
+    sessionPattern: '**/*.json',
+    sessionHint: '~/.gemini/sessions/*.json',
   },
   'aider': {
     name: 'Aider',
@@ -128,6 +155,9 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
     installHint: 'pip install aider-chat',
     headless: true,
     description: 'Aider AI pair programming tool',
+    sessionDir: '.aider/history',
+    sessionPattern: '**/*.md',
+    sessionHint: '~/.aider/history/*.md',
   },
   'continue': {
     name: 'Continue.dev',

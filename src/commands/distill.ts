@@ -28,7 +28,9 @@ import { parseJsonlLines, mechanicalExtract, buildDistillPrompt } from '../core/
 import { runCommand } from '../utils/exec.js';
 import { readConfig } from '../core/config.js';
 import { resolveAgent, buildAgentArgs, printAgentTable, AGENT_PROFILES, type AgentId } from '../core/agent-adapter.js';
+import { readGlobalConfig } from '../core/config.js';
 import { basename, join } from 'node:path';
+import { homedir } from 'node:os';
 
 export interface DistillOptions {
   /**
@@ -48,6 +50,8 @@ export interface DistillOptions {
   dryRun?: boolean;
   /** Explicit vault path */
   vault?: string;
+  /** Auto-discover and use the latest session file from the agent's session directory */
+  latest?: boolean;
 }
 
 export async function distillCommand(options: DistillOptions, cwd: string): Promise<void> {
@@ -77,8 +81,17 @@ export async function distillCommand(options: DistillOptions, cwd: string): Prom
   const profile = agentResult?.profile ?? AGENT_PROFILES['claude-code'];
   const resolvedBin = agentResult?.resolvedBin ?? 'claude';
 
+  // ── Resolve agent from global config if not explicitly set ────────────────
+  const globalCfg = await readGlobalConfig();
+  const agentIdResolved = agentResult?.id ?? (globalCfg.agent as AgentId) ?? (agentIdHint as AgentId) ?? undefined;
+  const configSessionDir = (globalCfg as Record<string, unknown>).sessionDir as string | undefined;
+
   // ── Build target hint ─────────────────────────────────────────────────────
-  const inputHint = buildInputHint(options.input, vault, cwd);
+  const inputHint = await buildInputHint(options.input, vault, cwd, {
+    latest: options.latest,
+    agentId: agentIdResolved,
+    configSessionDir,
+  });
 
   // ── Read vault context ────────────────────────────────────────────────────
   const agentsPath = join(vault, 'AGENTS.md').replace(/\\/g, '/');
@@ -168,7 +181,22 @@ async function mechanicalDistill(
 
 // ── Input hint builder ────────────────────────────────────────────────────────
 
-function buildInputHint(input: string | undefined, vault: string, cwd: string): string {
+async function buildInputHint(
+  input: string | undefined,
+  vault: string,
+  cwd: string,
+  options: { latest?: boolean; agentId?: string; configSessionDir?: string }
+): Promise<string> {
+  // --latest: auto-discover from agent's session directory
+  if (options.latest || (!input && options.agentId)) {
+    const sessionInfo = await discoverLatestSession(options.agentId, options.configSessionDir);
+    if (sessionInfo) {
+      return sessionInfo;
+    }
+    // fallback
+    return `the most recent session file in ${vault}/raw/sessions/ or current directory`;
+  }
+
   if (!input) {
     return `the most recent session file in ${vault}/raw/sessions/ or current directory`;
   }
@@ -183,6 +211,52 @@ function buildInputHint(input: string | undefined, vault: string, cwd: string): 
   }
 
   return input;
+}
+
+/**
+ * Discover the latest session file from the configured agent's session directory.
+ * Uses fuzzy matching — returns a description for the agent to search.
+ */
+async function discoverLatestSession(agentId?: string, configSessionDir?: string): Promise<string | null> {
+  const home = homedir();
+
+  // Priority 1: Use configSessionDir from global config (set during onboard)
+  if (configSessionDir) {
+    const resolved = normalizePath(configSessionDir);
+    const exists = await pathExists(resolved);
+    if (exists) {
+      const id = agentId as AgentId | undefined;
+      const pattern = id ? (AGENT_PROFILES[id]?.sessionPattern ?? '**/*') : '**/*';
+      return `Find the most recently modified session file in: ${resolved}\n` +
+        `File pattern: ${pattern}\n` +
+        `Sort by modification time descending and use the first (most recent) file.\n` +
+        `If the directory contains project subdirectories, search recursively.`;
+    }
+  }
+
+  // Priority 2: Use agent profile's default sessionDir
+  if (!agentId) return null;
+
+  const id = agentId as AgentId;
+  const profile = AGENT_PROFILES[id];
+  if (!profile?.sessionDir) return null;
+
+  const sessionBase = join(home, profile.sessionDir).replace(/\\/g, '/');
+  const exists = await pathExists(sessionBase);
+
+  if (!exists) {
+    // Still return the hint — the agent can try to find it
+    return `Find the most recently modified session file.\n` +
+      `Expected location: ${sessionBase}\n` +
+      `This directory may not exist yet. Try searching in: ${home}\n` +
+      `Look for ${profile.name} session/conversation files (${profile.sessionPattern ?? '*'}).`;
+  }
+
+  const pattern = profile.sessionPattern ?? '**/*';
+  return `Find the most recently modified session file in: ${sessionBase}\n` +
+    `File pattern: ${pattern}\n` +
+    `Sort by modification time descending and use the first (most recent) file.\n` +
+    `If the directory contains project subdirectories, search recursively.`;
 }
 
 // ── Agent prompt builder ──────────────────────────────────────────────────────
