@@ -24,6 +24,7 @@ import { AGENT_PROFILES, AgentId, detectInstalledAgents } from '../core/agent-ad
 import { writeGlobalConfig, readGlobalConfig } from '../core/config.js';
 import { initCommand } from './init.js';
 import { installHooksCommand } from './install-hooks.js';
+import { contextCommand } from './context.js';
 
 export interface OnboardOptions {
   /** Skip interactive prompts, use defaults */
@@ -204,6 +205,43 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
     }, cwd);
   } else {
     logger.info('Skipped hook installation. Run `memex install-hooks` later.');
+  }
+
+  // ── Step 4b: L0 Context Bootstrap ─────────────────────────────────────────
+
+  console.log();
+  logger.info('Step 4b/5 — Enable session-start context block (L0)\n');
+  logger.info(
+    'This writes a marker-delimited block to your project\'s CLAUDE.md / AGENTS.md\n' +
+    '(or equivalent) so every new session sees the vault location + a wiki digest.'
+  );
+  console.log();
+
+  let doContext = true;
+  if (!options.yes) {
+    doContext = await confirm({
+      message: 'Install L0 context bootstrap block into the project root?',
+      default: true,
+    });
+  }
+
+  if (doContext) {
+    try {
+      await contextCommand(
+        {
+          subcommand: 'install',
+          agent: agentId,
+          project: hooksProjectDir,
+          mode: 'digest',
+        },
+        cwd
+      );
+    } catch (err) {
+      logger.warn(`context install failed: ${(err as Error).message}`);
+      logger.info('You can retry later with `memex context install`.');
+    }
+  } else {
+    logger.info('Skipped. Run `memex context install` later if you change your mind.');
   }
 
   // ── Step 5: Save Config & Summary ─────────────────────────────────────────

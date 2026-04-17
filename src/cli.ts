@@ -17,6 +17,7 @@ import { fetchCommand } from './commands/fetch.js';
 import { configCommand } from './commands/config.js';
 import { onboardCommand } from './commands/onboard.js';
 import { updateCommand } from './commands/update.js';
+import { contextCommand } from './commands/context.js';
 import { getPackageVersion } from './version.js';
 import { ensureVault, ensureAgent } from './core/prereqs.js';
 
@@ -159,33 +160,101 @@ cli.command('distill [input]', 'Distill a session (JSONL/text) into a raw wiki d
 cli.command('ingest [target]', 'Ingest raw content into wiki pages (delegates to AI agent)')
   .option('--agent <agent>', 'AI agent: claude-code | codex | opencode | gemini-cli | aider')
   .option('--dry-run', 'Print prompt only, do not execute')
+  .option('--fix-lint', 'Prepend current lint issues to the prompt so the agent fixes them first')
+  .option('--loop', 'Run ingest→lint repeatedly until clean (alias for watch --once)')
+  .option('--max-iter <n>', 'Max iterations when --loop is set', { default: 3 })
   .option('--vault <vault>', 'Vault path')
   .example('memex ingest                              # ingest all raw/ files')
   .example('memex ingest raw/personal                 # ingest personal scene')
-  .example('memex ingest .\\global\\raw\\personal       # Windows path')
+  .example('memex ingest --fix-lint                   # one-shot lint-driven cleanup')
+  .example('memex ingest --loop --max-iter 5          # self-heal until clean')
   .example('memex ingest "notes about React"          # natural language')
   .example('memex ingest --agent codex                # use Codex')
   .action(async (target: string | undefined, options: Record<string, unknown>) => {
     const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await ensureAgent(options.agent as string | undefined, vault);
+    if (options.loop) {
+      const { runIngestLintLoop } = await import('./core/ingest-lint-loop.js');
+      await runIngestLintLoop({
+        vault,
+        cwd: process.cwd(),
+        target,
+        agent: options.agent as string | undefined,
+        maxIter: options.maxIter ? Number(options.maxIter) : 3,
+      });
+      return;
+    }
+    let lintReport;
+    if (options.fixLint) {
+      const { runLint } = await import('./commands/lint.js');
+      lintReport = await runLint({ vault }, process.cwd());
+    }
     await ingestCommand({
       target,
       agent: options.agent as string | undefined,
       dryRun: options.dryRun as boolean | undefined,
+      lintReport,
       vault,
     }, process.cwd());
   });
 
-cli.command('watch', 'Watch raw/ for changes and auto-ingest')
-  .option('--path <path>', 'Path to watch')
-  .option('--daemon', 'Run as background process')
+cli.command('watch', 'Watch raw/ and auto ingest → lint → ingest until clean')
+  .option('--path <path>', 'Path to watch (default: <vault>/raw)')
+  .option('--daemon', 'Spawn a detached background daemon')
+  .option('--stop', 'Stop the running watch daemon')
+  .option('--status', 'Show live daemon phase + current files + recent log tail')
+  .option('-f, --follow', 'Live-tail the daemon log (like `tail -f`)')
+  .option('--once', 'Run a single ingest→lint pass now and exit')
   .option('--agent <agent>', 'AI agent to use for auto-ingest')
+  .option(
+    '--max-iter <n>',
+    'Max ingest↔lint iterations per batch (0 = unlimited, default)',
+    { default: 0 },
+  )
+  .option(
+    '--force',
+    'Disable the "no progress twice in a row" convergence guard — loop until clean or user-stop',
+  )
+  .option(
+    '--heal',
+    'Auto-heal: run lint periodically and enter ingest→lint loop whenever issues are found, even without file events',
+  )
+  .option('--heal-interval <ms>', 'Heal-check period when --heal is on', { default: 60000 })
+  .option('--no-heal-on-start', 'Skip the startup heal check (only periodic)')
+  .option('--debounce <ms>', 'Debounce window after file changes', { default: 3000 })
+  .option('--ext <list>', 'Comma-separated extensions to react to', { default: 'md,jsonl,json,txt' })
   .option('--vault <vault>', 'Vault path')
+  .example('memex watch                         # foreground, file-event driven')
+  .example('memex watch --daemon                # background daemon, file-event driven')
+  .example('memex watch --daemon --heal         # + periodic lint → auto-fix when dirty')
+  .example('memex watch --daemon --heal --heal-interval 30000')
+  .example('memex watch --daemon --heal --force # heal + never bail on no-change')
+  .example('memex watch --max-iter 3            # cap each batch to 3 iterations')
+  .example('memex watch --stop                  # stop daemon')
+  .example('memex watch --status                # live phase / current files / stats')
+  .example('memex watch --follow                # tail -f the daemon log')
+  .example('memex watch --once                  # single ingest→lint pass')
   .action(async (options: Record<string, unknown>) => {
+    const wantsControl = Boolean(options.stop) || Boolean(options.status) || Boolean(options.follow);
     const vault = await ensureVault(options.vault as string | undefined, process.cwd());
+    if (!wantsControl) {
+      await ensureAgent(options.agent as string | undefined, vault);
+    }
     await watchCommand({
       path: options.path as string | undefined,
       daemon: options.daemon as boolean | undefined,
+      stop: options.stop as boolean | undefined,
+      status: options.status as boolean | undefined,
+      follow: options.follow as boolean | undefined,
+      once: options.once as boolean | undefined,
+      agent: options.agent as string | undefined,
+      maxIter: options.maxIter !== undefined ? Number(options.maxIter) : undefined,
+      force: options.force as boolean | undefined,
+      heal: options.heal as boolean | undefined,
+      healInterval: options.healInterval !== undefined ? Number(options.healInterval) : undefined,
+      healOnStart: options.healOnStart as boolean | undefined,
+      debounce: options.debounce ? Number(options.debounce) : undefined,
+      ext: options.ext as string | undefined,
       vault,
     }, process.cwd());
   });
@@ -311,17 +380,70 @@ cli.command('install-hooks', 'Install memex as slash commands in your AI agent s
   .option('--agent <agent>', 'Agent: claude-code | codex | opencode | gemini-cli | cursor | generic', { default: 'claude-code' })
   .option('--project <dir>', 'Project directory (default: current directory)')
   .option('--dry-run', 'Preview files without writing')
-  .example('memex install-hooks                        # install for Claude Code')
+  .option('--no-context', 'Skip writing the L0 context bootstrap block')
+  .option('--context-mode <mode>', 'Context block mode: minimal | digest', { default: 'digest' })
+  .example('memex install-hooks                        # install slash cmds + L0 context')
   .example('memex install-hooks --agent codex          # install for Codex')
-  .example('memex install-hooks --agent opencode       # install for OpenCode')
-  .example('memex install-hooks --agent gemini-cli     # install for Gemini CLI')
-  .example('memex install-hooks --agent cursor         # install for Cursor')
+  .example('memex install-hooks --no-context           # skip L0 bootstrap block')
   .example('memex install-hooks --dry-run              # preview only')
   .action(async (options: Record<string, unknown>) => {
+    const agent = options.agent as string;
+    const projectDir = options.project as string | undefined;
+    const dryRun = options.dryRun as boolean | undefined;
     await installHooksCommand({
-      agent: options.agent as string,
+      agent,
+      dryRun,
+      projectDir,
+    }, process.cwd());
+    // L0 context bootstrap (opt-out via --no-context)
+    if (options.context !== false) {
+      try {
+        await contextCommand({
+          subcommand: 'install',
+          agent,
+          project: projectDir,
+          mode: (options.contextMode as 'minimal' | 'digest') ?? 'digest',
+          dryRun,
+        }, process.cwd());
+      } catch (err) {
+        // non-fatal: hooks installed is still useful
+        console.error(`\n[context] L0 bootstrap skipped: ${(err as Error).message}`);
+      }
+    }
+  });
+
+// ── L0 context bootstrap ──────────────────────────────────────────────────────
+
+cli.command('context [subcommand]', 'Manage L0 project-root context bootstrap block  (install | refresh | uninstall | status)')
+  .option('--agent <agent>', 'Agent id (comma-separated for multiple)')
+  .option('--project <dir>', 'Project directory (default: current directory)')
+  .option('--mode <mode>', 'Content mode: minimal | digest', { default: 'digest' })
+  .option('--vault <vault>', 'Vault path (default: auto-resolve)')
+  .option('--all', 'refresh: iterate over every registered project')
+  .option('--quiet', 'suppress non-error output')
+  .option('--dry-run', 'Preview only')
+  .example('memex context install                       # write block for current project+agent')
+  .example('memex context install --agent claude-code,codex')
+  .example('memex context refresh                       # re-render block with latest wiki digest')
+  .example('memex context refresh --all                 # refresh every registered project')
+  .example('memex context uninstall                     # strip block from host file(s)')
+  .example('memex context status                        # list all registered projects')
+  .action(async (subcommand: string | undefined, options: Record<string, unknown>) => {
+    const sub = (subcommand ?? 'status') as 'install' | 'refresh' | 'uninstall' | 'status';
+    if (!['install', 'refresh', 'uninstall', 'status'].includes(sub)) {
+      console.error(`Unknown subcommand: ${sub}`);
+      console.error('Usage: memex context <install|refresh|uninstall|status>');
+      process.exit(2);
+    }
+    await contextCommand({
+      subcommand: sub,
+      agent: options.agent as string | undefined,
+      project: options.project as string | undefined,
+      mode: options.mode as 'minimal' | 'digest' | undefined,
+      vault: options.vault as string | undefined,
+      all: options.all as boolean | undefined,
+      quiet: options.quiet as boolean | undefined,
       dryRun: options.dryRun as boolean | undefined,
-      projectDir: options.project as string | undefined,
     }, process.cwd());
   });
 

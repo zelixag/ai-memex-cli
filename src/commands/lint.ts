@@ -11,24 +11,45 @@ export interface LintOptions {
   vault?: string;
 }
 
-export async function lintCommand(options: LintOptions, cwd: string): Promise<void> {
+export interface LintIssue {
+  type: 'orphan' | 'broken-link' | 'missing-frontmatter';
+  page?: string;
+  path?: string;
+  source?: string;
+  target?: string;
+  errors?: string[];
+}
+
+export interface LintReport {
+  vault: string;
+  checks: string[];
+  issues: LintIssue[];
+  summary: {
+    total: number;
+    orphans: number;
+    brokenLinks: number;
+    frontmatterErrors: number;
+  };
+}
+
+/**
+ * Programmatic lint: pure function that returns a structured report without
+ * touching the terminal. Used by `memex watch` to drive the ingest→lint loop.
+ */
+export async function runLint(options: Omit<LintOptions, 'json'>, cwd: string): Promise<LintReport> {
   const vault = await resolveVaultPath({ explicitPath: options.vault }, cwd);
   const wikiDir = `${vault}/wiki`;
   const index = await buildWikiIndex(wikiDir);
-  const checks = options.check ? options.check.split(',') : ['orphans', 'broken-links', 'missing-frontmatter'];
+  const checks = options.check
+    ? options.check.split(',')
+    : ['orphans', 'broken-links', 'missing-frontmatter'];
 
-  // Filter by scene if specified
   let pages = index.pages;
   if (options.scene) {
-    pages = pages.filter(p => p.scene === options.scene);
+    pages = pages.filter((p) => p.scene === options.scene);
   }
 
-  const report: {
-    vault: string;
-    checks: string[];
-    issues: Record<string, unknown>[];
-    summary: { total: number; orphans: number; brokenLinks: number; frontmatterErrors: number };
-  } = {
+  const report: LintReport = {
     vault,
     checks: [],
     issues: [],
@@ -64,24 +85,31 @@ export async function lintCommand(options: LintOptions, cwd: string): Promise<vo
     }
   }
 
+  return report;
+}
+
+export async function lintCommand(options: LintOptions, cwd: string): Promise<void> {
+  const report = await runLint(options, cwd);
+
   if (options.json) {
     console.log(JSON.stringify(report, null, 2));
-  } else {
-    logger.info(`Vault: ${vault}`);
-    logger.info(`Pages scanned: ${report.summary.total}`);
-    if (report.issues.length === 0) {
-      logger.success('No issues found.');
-    } else {
-      logger.warn(`${report.issues.length} issue(s) found:`);
-      for (const issue of report.issues) {
-        if (issue.type === 'orphan') {
-          logger.warn(`  orphan: ${issue.page} (${issue.path})`);
-        } else if (issue.type === 'broken-link') {
-          logger.warn(`  broken-link: ${issue.source} → [[${issue.target}]]`);
-        } else if (issue.type === 'missing-frontmatter') {
-          logger.warn(`  frontmatter: ${issue.page} — ${(issue.errors as string[]).join(', ')}`);
-        }
-      }
+    return;
+  }
+
+  logger.info(`Vault: ${report.vault}`);
+  logger.info(`Pages scanned: ${report.summary.total}`);
+  if (report.issues.length === 0) {
+    logger.success('No issues found.');
+    return;
+  }
+  logger.warn(`${report.issues.length} issue(s) found:`);
+  for (const issue of report.issues) {
+    if (issue.type === 'orphan') {
+      logger.warn(`  orphan: ${issue.page} (${issue.path})`);
+    } else if (issue.type === 'broken-link') {
+      logger.warn(`  broken-link: ${issue.source} → [[${issue.target}]]`);
+    } else if (issue.type === 'missing-frontmatter') {
+      logger.warn(`  frontmatter: ${issue.page} — ${(issue.errors ?? []).join(', ')}`);
     }
   }
 }

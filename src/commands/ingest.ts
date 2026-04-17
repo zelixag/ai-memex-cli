@@ -24,11 +24,13 @@
 
 import { resolveGlobalVaultPath } from '../core/vault.js';
 import { readFileUtf8, pathExists, normalizePath } from '../utils/fs.js';
-import { runCommand } from '../utils/exec.js';
+import { runCommandStreamed } from '../utils/exec.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/progress.js';
+import pc from 'picocolors';
 import { readConfig } from '../core/config.js';
 import { resolveAgent, buildAgentArgs, printAgentTable, AGENT_PROFILES, type AgentId } from '../core/agent-adapter.js';
+import type { LintReport } from './lint.js';
 import { join } from 'node:path';
 
 export interface IngestOptions {
@@ -43,6 +45,12 @@ export interface IngestOptions {
   dryRun?: boolean;
   /** Explicit vault path */
   vault?: string;
+  /**
+   * Optional lint report to attach to the prompt. When provided the agent is
+   * asked to fix these issues in addition to normal ingest work — used by
+   * `memex watch` to drive the ingest→lint→ingest self-healing loop.
+   */
+  lintReport?: LintReport;
 }
 
 export async function ingestCommand(options: IngestOptions, cwd: string): Promise<void> {
@@ -90,6 +98,7 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
     vault,
     agentId,
     contextFile: profile.contextFile,
+    lintReport: options.lintReport,
   });
 
   if (options.dryRun) {
@@ -108,16 +117,68 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
   logger.info(`Target: ${targetHint}`);
 
   const args = buildAgentArgs(profile, resolvedBin, prompt);
+  logger.info(`[ingest] agent  : ${profile.name} (${agentId})`);
+  logger.info(`[ingest] binary : ${resolvedBin}`);
+  logger.info(`[ingest] cwd    : ${vault}`);
+  logger.info(`[ingest] command: ${formatCommandLine(resolvedBin, args, prompt)}`);
+  logger.info(`[ingest] prompt : ${prompt.length} chars (${prompt.split(/\r?\n/).length} lines)`);
+  printPromptDigest(prompt);
+
+  // TTY users still see the spinner; in daemon mode stdout is piped to the
+  // log file so the spinner's carriage-return repaint becomes a stream of
+  // harmless lines — still informative, not broken.
   const spinner = createSpinner(`正在调用 ${profile.name} 处理 ingest…`);
 
+  console.log(pc.dim('── ingest: agent output ──'));
   try {
-    const { stdout, stderr } = await runCommand(resolvedBin, args, { cwd: vault });
+    const { stdout, stderr, code } = await runCommandStreamed(resolvedBin, args, {
+      cwd: vault,
+      onStdout: (chunk) => process.stdout.write(chunk),
+      onStderr: (chunk) => process.stderr.write(chunk),
+    });
+    console.log(pc.dim(`── ingest: agent done (exit ${code}, stdout=${stdout.length}B, stderr=${stderr.length}B) ──`));
     spinner.stop('Ingest complete.', 'ok');
-    if (stdout) process.stdout.write(stdout);
-    if (stderr) process.stderr.write(stderr);
   } catch (e) {
-    spinner.stop(`Ingest failed: ${e instanceof Error ? e.message : String(e)}`, 'err');
+    const err = e as Error & { code?: number | null };
+    console.log(pc.dim(`── ingest: agent FAILED (exit ${err.code ?? '?'}) ──`));
+    spinner.stop(`Ingest failed: ${err.message}`, 'err');
   }
+}
+
+// ── Verbose logging helpers ──────────────────────────────────────────────────
+
+/**
+ * Render the exact command line for the log, but replace the (potentially
+ * enormous) prompt argument with a placeholder so the log stays readable.
+ */
+function formatCommandLine(bin: string, args: string[], prompt: string): string {
+  const placeholder = `<prompt:${prompt.length}chars>`;
+  const masked = args.map((a) => (a === prompt ? placeholder : quoteArgForLog(a)));
+  return [quoteArgForLog(bin), ...masked].join(' ');
+}
+
+function quoteArgForLog(arg: string): string {
+  if (arg === '') return '""';
+  if (/[\s"'`$\\]/.test(arg)) {
+    return '"' + arg.replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+  }
+  return arg;
+}
+
+/**
+ * Print a truncated, indented preview of the prompt so future readers of
+ * the log can see what the agent was actually asked to do without the log
+ * ballooning by tens of KB per run.
+ */
+function printPromptDigest(prompt: string, maxLines = 40): void {
+  const lines = prompt.split(/\r?\n/);
+  const head = lines.slice(0, maxLines);
+  console.log(pc.dim('── ingest: prompt (head) ──'));
+  for (const line of head) console.log('  ' + line);
+  if (lines.length > maxLines) {
+    console.log(pc.dim(`  … ${lines.length - maxLines} more line(s) elided`));
+  }
+  console.log(pc.dim('── ingest: prompt end ──'));
 }
 
 // ── Target hint builder ───────────────────────────────────────────────────────
@@ -152,13 +213,16 @@ interface IngestPromptOptions {
   vault: string;
   agentId: AgentId;
   contextFile: string;
+  lintReport?: LintReport;
 }
 
 function buildIngestPrompt(opts: IngestPromptOptions): string {
-  const { agentsContent, indexContent, targetHint, vault, contextFile } = opts;
+  const { agentsContent, indexContent, targetHint, vault, contextFile, lintReport } = opts;
   const today = new Date().toISOString().split('T')[0];
 
-  return `You are a knowledge base maintenance agent for the LLM Wiki system.
+  const fixSection = formatLintReportForPrompt(lintReport);
+
+  return `You are a knowledge base maintenance agent for the LLM Wiki system.${fixSection}
 
 ## Your Task
 
@@ -238,4 +302,42 @@ For each raw source file you find:
 - If a source is in a language other than English, create pages in the same language.
 
 Begin now. Search for the target files and process them.`;
+}
+
+/**
+ * Format a lint report into a high-priority fix-up section that is prepended
+ * to the ingest prompt. When the report is empty or missing we contribute
+ * nothing so the prompt stays identical to the plain ingest case.
+ */
+function formatLintReportForPrompt(report?: LintReport): string {
+  if (!report || report.issues.length === 0) return '';
+
+  const lines: string[] = [];
+  lines.push('\n\n## ⚠ Lint Feedback — FIX THESE FIRST\n');
+  lines.push(
+    `The previous ingest left the wiki with ${report.issues.length} lint issue(s). ` +
+      'Before touching any new raw sources, repair the items below. For each one, ' +
+      'update or create the relevant wiki page so that a subsequent `memex lint` run ' +
+      'reports zero issues.\n',
+  );
+  lines.push(
+    `Totals — orphans: ${report.summary.orphans}, broken-links: ${report.summary.brokenLinks}, ` +
+      `frontmatter errors: ${report.summary.frontmatterErrors}\n`,
+  );
+  lines.push('Issues:');
+  for (const issue of report.issues.slice(0, 200)) {
+    if (issue.type === 'orphan') {
+      lines.push(`- orphan: \`${issue.page}\` (${issue.path}) — link it from index.md or another page, or delete if obsolete.`);
+    } else if (issue.type === 'broken-link') {
+      lines.push(`- broken-link: \`${issue.source}\` → \`[[${issue.target}]]\` — either create the missing page or fix the link target.`);
+    } else if (issue.type === 'missing-frontmatter') {
+      lines.push(`- frontmatter: \`${issue.page}\` — missing/invalid fields: ${(issue.errors ?? []).join(', ')}`);
+    }
+  }
+  if (report.issues.length > 200) {
+    lines.push(`- …and ${report.issues.length - 200} more (truncated).`);
+  }
+  lines.push('');
+  lines.push('Do NOT mutate raw/ sources to silence lint — always fix the wiki side.');
+  return lines.join('\n');
 }
