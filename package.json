@@ -1,6 +1,6 @@
 {
   "name": "ai-memex-cli",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI for building and maintaining persistent LLM wikis",
   "type": "module",
   "bin": {
@@ -11,7 +11,13 @@
     "dev": "tsc --watch",
     "test": "vitest",
     "test:run": "vitest run",
-    "prepublishOnly": "pnpm build"
+    "prepublishOnly": "pnpm build",
+    "changelog": "changelogen",
+    "changelog:bump": "changelogen --bump --patch",
+    "release": "changelogen --release --patch",
+    "release:minor": "changelogen --release --minor",
+    "release:major": "changelogen --release --major",
+    "release:publish": "changelogen --release --patch --publish"
   },
   "keywords": [
     "cli",
@@ -37,6 +43,7 @@
     "dist/",
     "templates/",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "dependencies": {
@@ -54,6 +61,7 @@
     "@types/jsdom": "^28.0.1",
     "@types/node": "^20.0.0",
     "@types/turndown": "^5.0.6",
+    "changelogen": "^0.6.2",
     "typescript": "^5.4.0",
     "vitest": "^1.0.0"
   },

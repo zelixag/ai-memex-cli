@@ -17,6 +17,7 @@ import { fetchCommand } from './commands/fetch.js';
 import { configCommand } from './commands/config.js';
 import { onboardCommand } from './commands/onboard.js';
 import { updateCommand } from './commands/update.js';
+import { getPackageVersion } from './version.js';
 
 const cli = cac('memex');
 
@@ -319,6 +320,6 @@ cli.command('update', 'Update memex to the latest version')
   });
 
 cli.help();
-cli.version('0.2.0');
+cli.version(getPackageVersion());
 
 cli.parse();

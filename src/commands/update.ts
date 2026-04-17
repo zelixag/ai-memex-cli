@@ -17,10 +17,10 @@
 
 import { logger } from '../utils/logger.js';
 import { runCommand, commandExists } from '../utils/exec.js';
-import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { pathExists } from '../utils/fs.js';
+import { getPackageVersion } from '../version.js';
 
 export interface UpdateOptions {
   /** Only check for updates without installing */
@@ -29,18 +29,10 @@ export interface UpdateOptions {
   source?: 'npm' | 'github';
 }
 
-/** Get the current installed version from package.json */
+/** Get the current installed version from package.json (same as `memex -v`) */
 function getCurrentVersion(): string {
-  try {
-    // Navigate from dist/commands/update.js → project root
-    const thisFile = fileURLToPath(import.meta.url);
-    const projectRoot = join(dirname(thisFile), '..', '..');
-    const pkgPath = join(projectRoot, 'package.json');
-    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8'));
-    return pkg.version ?? 'unknown';
-  } catch {
-    return 'unknown';
-  }
+  const v = getPackageVersion();
+  return v === '0.0.0' ? 'unknown' : v;
 }
 
 /** Detect how memex was installed */
