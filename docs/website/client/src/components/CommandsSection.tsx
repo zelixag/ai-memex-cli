@@ -62,7 +62,7 @@ function buildCoreCommands(t: AppMessages["commands"]): Command[] {
       icon: Beaker,
       desc: c.distill.desc,
       usage:
-        "memex distill --latest --role backend\nmemex distill ./session.jsonl --role tech-lead",
+        "memex distill\nmemex distill --scene personal\nmemex distill --latest --role backend\nmemex distill ./session.jsonl --no-llm",
       flags: [...c.distill.flags],
     },
     {

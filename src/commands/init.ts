@@ -34,8 +34,9 @@ export async function initCommand(options: InitOptions, cwd: string): Promise<vo
       }
       await writeFileUtf8(`${vaultPath}/raw/${scene}/.gitkeep`, '');
     }
-    // Sessions directory for distill output
-    await writeFileUtf8(`${vaultPath}/raw/sessions/.gitkeep`, '');
+    // Sessions distilled from agent transcripts live under team scene
+    // (they tend to be team-shareable knowledge). Override with `memex distill --scene <x>`.
+    await writeFileUtf8(`${vaultPath}/raw/team/sessions/.gitkeep`, '');
 
     // AGENTS.md
     const agentsTemplate = await loadTemplate('AGENTS.md');

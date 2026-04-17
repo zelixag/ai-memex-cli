@@ -39,6 +39,7 @@ import {
 import { webSearch, isUrl, normalizeUrl, type SearchResult } from '../core/searcher.js';
 import { writeFileUtf8, normalizePath } from '../utils/fs.js';
 import { runCommand, commandExists } from '../utils/exec.js';
+import { createProgressBar, createSpinner } from '../utils/progress.js';
 import { logger } from '../utils/logger.js';
 import { resolveAgent, buildAgentArgs, type AgentId } from '../core/agent-adapter.js';
 import { readConfig } from '../core/config.js';
@@ -203,6 +204,8 @@ async function runKeywordSearch(
   };
 
   const written: string[] = [];
+  const failures: string[] = [];
+  const bar = createProgressBar(selected.length, '抓取页面');
   for (const result of selected) {
     try {
       const fetched = await fetchUrl(result.url, fetchOpts);
@@ -211,14 +214,18 @@ async function runKeywordSearch(
       const markdown = resultToMarkdown(fetched);
       await writeFileUtf8(destPath, markdown);
       written.push(destPath);
-      logger.info(`  ✓ ${fetched.title.slice(0, 60)} → ${stem}.md (${fetched.wordCount} words)`);
+      bar.tick(fetched.title.slice(0, 40) || result.url);
     } catch (e) {
-      logger.warn(`  ✗ ${result.url}: ${e instanceof Error ? e.message : String(e)}`);
+      failures.push(`${result.url}: ${e instanceof Error ? e.message : String(e)}`);
+      bar.tick(`(fail) ${result.url.slice(0, 40)}`);
     }
   }
+  bar.done(
+    `Fetched ${written.length}/${selected.length} page(s) to ${rawDir}/${failures.length ? `，失败 ${failures.length}` : ''}`
+  );
+  for (const f of failures) logger.warn(`  ✗ ${f}`);
 
   if (written.length > 0) {
-    logger.success(`Fetched ${written.length} page(s) to ${rawDir}/`);
     logger.info('Next: run `memex ingest` to process into wiki pages.');
   } else {
     logger.warn('No pages were successfully fetched.');
@@ -255,22 +262,42 @@ async function runDirectFetch(
   let results: FetchResult[] = [];
 
   if (options.sitemap) {
-    logger.info(`Parsing sitemap: ${url}`);
-    const urls = await parseSitemap(url);
-    const limit = options.maxPages ?? 20;
-    logger.info(`Found ${urls.length} URLs, fetching up to ${limit}...`);
-    const subset = urls.slice(0, limit);
-    results = await fetchBatch(subset, crawlOpts);
+    const spinner = createSpinner(`解析 sitemap：${url}`);
+    try {
+      const urls = await parseSitemap(url);
+      const limit = options.maxPages ?? 20;
+      spinner.stop(`sitemap 含 ${urls.length} 条，开始抓取前 ${limit} 条`, 'info');
+      const subset = urls.slice(0, limit);
+      results = await fetchBatch(subset, crawlOpts);
+    } catch (e) {
+      spinner.stop(`sitemap 解析失败：${e instanceof Error ? e.message : String(e)}`, 'err');
+      return;
+    }
   } else if ((crawlOpts.depth ?? 0) > 0) {
-    logger.info(`Crawling ${url} (depth=${crawlOpts.depth}, max=${crawlOpts.maxPages})...`);
-    results = await crawlSite(url, crawlOpts);
+    const spinner = createSpinner(
+      `抓取 ${url} (depth=${crawlOpts.depth}, max=${crawlOpts.maxPages})`
+    );
+    try {
+      results = await crawlSite(url, crawlOpts);
+      spinner.stop(`抓取完成：${results.length} 个页面`, 'ok');
+    } catch (e) {
+      spinner.stop(`抓取失败：${e instanceof Error ? e.message : String(e)}`, 'err');
+      return;
+    }
   } else {
-    logger.info(`Fetching ${url}...`);
-    const result = await fetchUrl(url, crawlOpts);
-    results = [result];
+    const spinner = createSpinner(`抓取 ${url}`);
+    try {
+      const result = await fetchUrl(url, crawlOpts);
+      results = [result];
+      spinner.stop(`已抓取：${result.title.slice(0, 60)}`, 'ok');
+    } catch (e) {
+      spinner.stop(`抓取失败：${e instanceof Error ? e.message : String(e)}`, 'err');
+      return;
+    }
   }
 
   const written: string[] = [];
+  const bar = createProgressBar(results.length, '写入 markdown');
   for (const result of results) {
     const stem = options.out && results.length === 1
       ? options.out
@@ -279,10 +306,9 @@ async function runDirectFetch(
     const markdown = resultToMarkdown(result);
     await writeFileUtf8(destPath, markdown);
     written.push(destPath);
-    logger.info(`  ✓ ${result.title.slice(0, 60)} → ${stem}.md (${result.wordCount} words)`);
+    bar.tick(result.title.slice(0, 40) || result.url);
   }
-
-  logger.success(`Fetched ${written.length} page(s) to ${rawDir}/`);
+  bar.done(`已写入 ${written.length} 个页面到 ${rawDir}/`);
   logger.info('Next: run `memex ingest` to process into wiki pages.');
 }
 
@@ -320,20 +346,20 @@ async function runAgentSearch(
     return;
   }
 
-  logger.info(`Delegating search + fetch to ${resolved.profile.name}...`);
   logger.info(`  Query: "${query}"`);
   logger.info(`  Top ${topN} results → ${rawDir}/`);
 
   const args = buildAgentArgs(resolved.profile, resolved.resolvedBin, prompt);
+  const spinner = createSpinner(`正在调用 ${resolved.profile.name} 搜索并抓取…`);
 
   try {
     const { stdout, stderr } = await runCommand(resolved.resolvedBin, args, { cwd });
+    spinner.stop(`Agent search + fetch complete. Check ${rawDir}/ for results.`, 'ok');
     if (stdout) process.stdout.write(stdout);
     if (stderr) process.stderr.write(stderr);
-    logger.success(`Agent search + fetch complete. Check ${rawDir}/ for results.`);
     logger.info('Next: run `memex ingest` to process into wiki pages.');
   } catch (e) {
-    logger.error(`Agent failed: ${e instanceof Error ? e.message : String(e)}`);
+    spinner.stop(`Agent failed: ${e instanceof Error ? e.message : String(e)}`, 'err');
   }
 }
 
@@ -367,17 +393,17 @@ async function runAgentFetch(
     return;
   }
 
-  logger.info(`Delegating fetch to ${resolved.profile.name}...`);
   const args = buildAgentArgs(resolved.profile, resolved.resolvedBin, prompt);
+  const spinner = createSpinner(`正在调用 ${resolved.profile.name} 抓取…`);
 
   try {
     const { stdout, stderr } = await runCommand(resolved.resolvedBin, args, { cwd });
+    spinner.stop(`Agent fetch complete. Check ${rawDir}/ for results.`, 'ok');
     if (stdout) process.stdout.write(stdout);
     if (stderr) process.stderr.write(stderr);
-    logger.success(`Agent fetch complete. Check ${rawDir}/ for results.`);
     logger.info('Next: run `memex ingest` to process into wiki pages.');
   } catch (e) {
-    logger.error(`Agent fetch failed: ${e instanceof Error ? e.message : String(e)}`);
+    spinner.stop(`Agent fetch failed: ${e instanceof Error ? e.message : String(e)}`, 'err');
   }
 }
 
@@ -385,15 +411,20 @@ async function runAgentFetch(
 
 async function fetchBatch(urls: string[], opts: FetchOptions): Promise<FetchResult[]> {
   const results: FetchResult[] = [];
+  const failures: string[] = [];
+  const bar = createProgressBar(urls.length, '批量抓取');
   for (const url of urls) {
     try {
       const r = await fetchUrl(url, opts);
       results.push(r);
-      logger.info(`  ✓ ${url}`);
+      bar.tick(url);
     } catch (e) {
-      logger.warn(`  ✗ ${url}: ${e instanceof Error ? e.message : String(e)}`);
+      failures.push(`${url}: ${e instanceof Error ? e.message : String(e)}`);
+      bar.tick(`(fail) ${url}`);
     }
   }
+  bar.done(`批量抓取完成：${results.length}/${urls.length}${failures.length ? `，失败 ${failures.length}` : ''}`);
+  for (const f of failures) logger.warn(`  ✗ ${f}`);
   return results;
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { cac } from 'cac';
 import { initCommand } from './commands/init.js';
-import { distillCommand } from './commands/distill.js';
+import { distillCommand, type DistillOptions } from './commands/distill.js';
 import { ingestCommand } from './commands/ingest.js';
 import { watchCommand } from './commands/watch.js';
 import { globCommand } from './commands/glob.js';
@@ -18,6 +18,7 @@ import { configCommand } from './commands/config.js';
 import { onboardCommand } from './commands/onboard.js';
 import { updateCommand } from './commands/update.js';
 import { getPackageVersion } from './version.js';
+import { ensureVault, ensureAgent } from './core/prereqs.js';
 
 const cli = cac('memex');
 
@@ -47,7 +48,8 @@ cli.command('init [path]', 'Initialize a vault')
 cli.command('status', 'Show vault overview')
   .option('--vault <vault>', 'Vault path')
   .action(async (options: Record<string, unknown>) => {
-    await statusCommand({ vault: options.vault as string | undefined }, process.cwd());
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
+    await statusCommand({ vault }, process.cwd());
   });
 
 // ── Configuration ─────────────────────────────────────────────────────────────
@@ -100,6 +102,7 @@ cli.command('fetch <target>', 'Fetch web content or search keywords into raw/')
   .example('memex fetch "OAuth2 PKCE flow" --agent claude-code')
   .example('memex fetch "rust async" --yes                        # auto-fetch top results')
   .action(async (target: string, options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await fetchCommand(target, {
       scene: options.scene as any,
       depth: Number(options.depth),
@@ -113,7 +116,7 @@ cli.command('fetch <target>', 'Fetch web content or search keywords into raw/')
       out: options.out as string | undefined,
       aggressive: options.aggressive as boolean | undefined,
       dryRun: options.dryRun as boolean | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -121,25 +124,33 @@ cli.command('distill [input]', 'Distill a session (JSONL/text) into a raw wiki d
   .option('--out <out>', 'Output path')
   .option('--role <role>', 'Role to extract best practices for (e.g., backend-engineer)')
   .option('--agent <agent>', 'AI agent: claude-code | codex | opencode | gemini-cli | aider')
+  .option('--scene <scene>', 'Wiki scene: personal/research/reading/team (default: team)')
   .option('--latest', 'Auto-discover the most recent session from agent session directory')
   .option('--no-llm', 'Mechanical extraction only (requires concrete file path)')
   .option('--dry-run', 'Print prompt only')
   .option('--vault <vault>', 'Vault path')
+  .example('memex distill                                       # convert all sessions → raw/team/sessions/*.md')
+  .example('memex distill --scene personal                      # file sessions under raw/personal/sessions/')
   .example('memex distill session.jsonl')
   .example('memex distill --latest                              # auto-find latest session')
   .example('memex distill --latest --role backend-engineer      # distill with role')
   .example('memex distill .\\sessions\\today.jsonl --role backend-engineer')
   .example('memex distill --agent codex')
   .action(async (input: string | undefined, options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
+    if (options.llm !== false) {
+      await ensureAgent(options.agent as string | undefined, vault);
+    }
     await distillCommand({
       input,
       out: options.out as string | undefined,
       role: options.role as string | undefined,
       agent: options.agent as string | undefined,
+      scene: options.scene as DistillOptions['scene'] | undefined,
       latest: options.latest as boolean | undefined,
       noLlm: !options.llm,
       dryRun: options.dryRun as boolean | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -155,11 +166,13 @@ cli.command('ingest [target]', 'Ingest raw content into wiki pages (delegates to
   .example('memex ingest "notes about React"          # natural language')
   .example('memex ingest --agent codex                # use Codex')
   .action(async (target: string | undefined, options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
+    await ensureAgent(options.agent as string | undefined, vault);
     await ingestCommand({
       target,
       agent: options.agent as string | undefined,
       dryRun: options.dryRun as boolean | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -169,10 +182,11 @@ cli.command('watch', 'Watch raw/ for changes and auto-ingest')
   .option('--agent <agent>', 'AI agent to use for auto-ingest')
   .option('--vault <vault>', 'Vault path')
   .action(async (options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await watchCommand({
       path: options.path as string | undefined,
       daemon: options.daemon as boolean | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -183,12 +197,13 @@ cli.command('new <type> <name>', 'Scaffold a new wiki page')
   .option('--tags <tags>', 'Comma-separated tags')
   .option('--vault <vault>', 'Vault path')
   .action(async (type: string, name: string, options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await newCommand({
       type: type as any,
       name,
       scene: options.scene as any,
       tags: (options.tags as string)?.split(','),
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -197,11 +212,12 @@ cli.command('log <action>', 'Append an entry to log.md')
   .option('--note <note>', 'Note text')
   .option('--vault <vault>', 'Vault path')
   .action(async (action: string, options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await logCommand({
       action,
       target: options.target as string | undefined,
       note: options.note as string | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -214,6 +230,7 @@ cli.command('search <query>', 'Search wiki and raw pages')
   .option('--no-include-raw', 'Only search wiki/ (skip raw/)')
   .option('--vault <vault>', 'Vault path')
   .action(async (query: string, options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await searchCommand({
       query,
       scene: options.scene as string | undefined,
@@ -222,7 +239,7 @@ cli.command('search <query>', 'Search wiki and raw pages')
       json: options.json as boolean | undefined,
       limit: Number(options.limit),
       includeRaw: options.includeRaw as boolean | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -232,11 +249,12 @@ cli.command('lint', 'Health-check the wiki')
   .option('--json', 'Output JSON')
   .option('--vault <vault>', 'Vault path')
   .action(async (options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await lintCommand({
       scene: options.scene as string | undefined,
       check: options.check as string | undefined,
       json: options.json as boolean | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -244,9 +262,10 @@ cli.command('link-check', 'Validate wiki links')
   .option('--fix', 'Suggest fixes')
   .option('--vault <vault>', 'Vault path')
   .action(async (options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await linkCheckCommand({
       fix: options.fix as boolean | undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -259,12 +278,13 @@ cli.command('glob', 'Project relevant wiki pages into local vault')
   .option('--max <max>', 'Max pages', { default: 30 })
   .option('--vault <vault>', 'Global vault path')
   .action(async (options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await globCommand({
       project: options.project as string,
       into: options.into as string | undefined,
       keywords: options.keywords as string | undefined,
       max: Number(options.max),
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 
@@ -275,12 +295,13 @@ cli.command('inject', 'Output wiki context for agent consumption')
   .option('--max-tokens <max>', 'Token limit')
   .option('--vault <vault>', 'Vault path')
   .action(async (options: Record<string, unknown>) => {
+    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
     await injectCommand({
       task: options.task as string | undefined,
       keywords: options.keywords as string | undefined,
       format: options.format as 'md' | 'json',
       maxTokens: options.maxTokens ? Number(options.maxTokens) : undefined,
-      vault: options.vault as string | undefined,
+      vault,
     }, process.cwd());
   });
 

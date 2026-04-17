@@ -26,6 +26,7 @@ import { resolveGlobalVaultPath } from '../core/vault.js';
 import { readFileUtf8, pathExists, normalizePath } from '../utils/fs.js';
 import { runCommand } from '../utils/exec.js';
 import { logger } from '../utils/logger.js';
+import { createSpinner } from '../utils/progress.js';
 import { readConfig } from '../core/config.js';
 import { resolveAgent, buildAgentArgs, printAgentTable, AGENT_PROFILES, type AgentId } from '../core/agent-adapter.js';
 import { join } from 'node:path';
@@ -103,19 +104,19 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
   }
 
   // ── Execute ───────────────────────────────────────────────────────────────
-  logger.info(`Ingesting with ${profile.name}...`);
   logger.info(`Vault: ${vault}`);
   logger.info(`Target: ${targetHint}`);
 
   const args = buildAgentArgs(profile, resolvedBin, prompt);
+  const spinner = createSpinner(`正在调用 ${profile.name} 处理 ingest…`);
 
   try {
     const { stdout, stderr } = await runCommand(resolvedBin, args, { cwd: vault });
+    spinner.stop('Ingest complete.', 'ok');
     if (stdout) process.stdout.write(stdout);
     if (stderr) process.stderr.write(stderr);
-    logger.success(`Ingest complete.`);
   } catch (e) {
-    logger.error(`Ingest failed: ${e instanceof Error ? e.message : String(e)}`);
+    spinner.stop(`Ingest failed: ${e instanceof Error ? e.message : String(e)}`, 'err');
   }
 }
 
@@ -168,9 +169,25 @@ Ingest raw source documents into the wiki knowledge base.
 ${targetHint}
 
 Use your file search tools (Read, Glob, Grep) to find the relevant files.
-If the target is a directory path, read all .md files inside it recursively.
+If the target is a directory path, read all \`.md\`, \`.jsonl\`, \`.json\` and \`.txt\` files inside it recursively.
 If the target is a file path, read that specific file.
 If the target is a natural language description, search for matching files in ${vault}/raw/.
+
+### Session files
+
+Agent conversation transcripts distilled by \`memex distill\` live under
+\`${vault}/raw/<scene>/sessions/\` (default scene: \`team\`). They are already
+structured Markdown with a YAML frontmatter containing \`source-type: session\`,
+\`started\`, \`ended\`, \`turns\` and \`sources\`, plus per-turn \`## 👤 User\` /
+\`## 🤖 Assistant\` sections.
+
+Treat each \`.md\` session file as **one source document** and:
+
+- Extract key decisions, final answers, discovered best practices, reusable code snippets, and open questions.
+- Preserve the session's language (don't translate).
+- When writing wiki pages, cite the session file under \`sources:\` and keep \`source-type: session\` where applicable.
+- If you encounter legacy raw \`.jsonl\` files (older vaults), parse them line-by-line — each line is a JSON message with \`role\` / \`content\`; skip \`tool_use\` / \`tool_result\` blocks and \`role: "system"\`.
+- Never mutate or delete session source files.
 
 ## Wiki Schema (AGENTS.md)
 

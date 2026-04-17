@@ -59,10 +59,10 @@ export const zhCN = {
       },
       {
         title: "会话蒸馏",
-        subtitle: "按角色的最佳实践",
+        subtitle: "结构化 + 可选 LLM 蒸馏",
         description:
-          "从 AI 智能体会话中提取结构化最佳实践。自动发现会话文件，按角色（后端、前端、运维等）蒸馏，构建团队知识库。",
-        code: `memex distill --latest --role backend\nmemex distill ./chat-log.jsonl --role "tech-lead"\nmemex distill --latest --agent claude-code`,
+          "无参数即可把 Claude Code / Codex / OpenCode 全部历史会话就地解析为结构化 Markdown（含时间戳、角色、工具调用折叠），写入 raw/team/sessions/。需要更深度的角色化总结时再交给智能体做二次蒸馏。不拷贝原始 JSONL。",
+        code: `memex distill                               # 全部会话 → raw/team/sessions/*.md\nmemex distill --scene personal              # 改放个人 scene\nmemex distill --latest --role backend       # 可选：让智能体做角色蒸馏`,
       },
       {
         title: "通用智能体支持",
@@ -82,8 +82,9 @@ export const zhCN = {
         description: "实体、概念、来源、摘要——均带 frontmatter 校验与交叉链接。",
       },
       {
-        title: "健康检查",
-        description: "检测断链、孤儿页、缺失 frontmatter，保持知识库干净连通。",
+        title: "进度可视与前置校验",
+        description:
+          "长任务（抓取 / 蒸馏 / ingest）自带进度条与旋转指示；未初始化 vault 或未选定智能体时，所有命令会友好报错并引导 memex onboard。",
       },
     ],
   },
@@ -121,6 +122,8 @@ export const zhCN = {
       { indent: 2, text: "research/", note: "抓取的文档与文章" },
       { indent: 2, text: "personal/", note: "个人笔记" },
       { indent: 2, text: "reading/", note: "阅读材料" },
+      { indent: 2, text: "team/", note: "团队共享知识" },
+      { indent: 3, text: "sessions/", note: "结构化会话 md（distill 默认输出）" },
       { indent: 1, text: "wiki/", highlight: true },
       { indent: 2, text: "research/" },
       { indent: 3, text: "entities/", note: "人物、工具、组织" },
@@ -165,11 +168,13 @@ export const zhCN = {
         flags: ["--agent <name>  指定智能体", "--dry-run       仅预览提示词"],
       },
       distill: {
-        desc: "从智能体会话日志中按角色提取最佳实践。",
+        desc: "无参：把全部原生会话结构化转为 Markdown 写入 raw/<scene>/sessions/（默认 team）；传入会话路径或 --latest 时，调用智能体做角色化蒸馏。",
         flags: [
-          "--latest        使用最近会话",
-          "--role <role>   按角色筛选",
+          "--scene <name>  目标 scene 目录（默认 team）",
+          "--latest        自动定位并蒸馏最近会话",
+          "--role <role>   按角色筛选（需配合 LLM）",
           "--agent <name>  指定智能体",
+          "--no-llm        机械模式，仅结构化转写",
           "--dry-run       仅预览提示词",
         ],
       },
@@ -312,8 +317,8 @@ export const zhCN = {
         number: "04",
         title: "摄入与蒸馏",
         description:
-          "让智能体将 raw 处理为结构化 Wiki；蒸馏会话为可复用的最佳实践。",
-        code: `memex ingest\nmemex distill --latest --role backend`,
+          "先用一条 distill 把全部会话转成结构化 md，再让智能体把 raw 整体 ingest 为 Wiki。需要角色化总结时再单独跑一次 --role。",
+        code: `memex distill                 # 全部会话 → raw/team/sessions/*.md\nmemex ingest                  # 让智能体整理 raw/ → wiki/\nmemex distill --latest --role backend   # 可选：角色蒸馏`,
       },
       {
         number: "05",

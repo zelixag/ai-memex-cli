@@ -62,10 +62,10 @@ export const enUS = {
       },
       {
         title: "Distill Sessions",
-        subtitle: "Role-Based Best Practices",
+        subtitle: "Structured + Optional LLM Pass",
         description:
-          "Extract structured best practices from your AI agent conversations. Automatically discovers session files, distills them by role (backend, frontend, devops), and builds your team's knowledge base.",
-        code: `memex distill --latest --role backend\nmemex distill ./chat-log.jsonl --role "tech-lead"\nmemex distill --latest --agent claude-code`,
+          "Run with no args and every Claude Code / Codex / OpenCode transcript is parsed into structured Markdown (timestamps, roles, collapsed tool calls) under raw/team/sessions/. Want role-based summaries? Just hand it to your agent. Original JSONL is never copied.",
+        code: `memex distill                               # all sessions → raw/team/sessions/*.md\nmemex distill --scene personal              # route to the personal scene\nmemex distill --latest --role backend       # optional: agent-driven distillation`,
       },
       {
         title: "Universal Agent Support",
@@ -87,9 +87,9 @@ export const enUS = {
           "Entities, concepts, sources, summaries — each with frontmatter schema validation and cross-linking.",
       },
       {
-        title: "Health Checks",
+        title: "Progress & Preflight",
         description:
-          "Lint for broken links, orphan pages, missing frontmatter. Keep your knowledge base clean and connected.",
+          "Long-running tasks (fetch / distill / ingest) now ship with progress bars and spinners. Missing vault or unconfigured agent? Every command fails fast with a friendly pointer to memex onboard.",
       },
     ],
   },
@@ -127,6 +127,8 @@ export const enUS = {
       { indent: 2, text: "research/", note: "Fetched docs, articles" },
       { indent: 2, text: "personal/", note: "Personal notes" },
       { indent: 2, text: "reading/", note: "Reading material" },
+      { indent: 2, text: "team/", note: "Team-shared knowledge" },
+      { indent: 3, text: "sessions/", note: "Structured session md (distill default)" },
       { indent: 1, text: "wiki/", highlight: true },
       { indent: 2, text: "research/" },
       { indent: 3, text: "entities/", note: "People, tools, orgs" },
@@ -172,11 +174,13 @@ export const enUS = {
         flags: ["--agent <name>  Use specific agent", "--dry-run       Preview prompt only"],
       },
       distill: {
-        desc: "Extract role-based best practices from agent session logs.",
+        desc: "No-arg: convert every native session into structured Markdown under raw/<scene>/sessions/ (default: team). Pass a path or --latest to invoke the agent for role-based distillation.",
         flags: [
-          "--latest        Use most recent session",
-          "--role <role>   Filter by role",
+          "--scene <name>  Target scene folder (default: team)",
+          "--latest        Auto-discover the most recent session",
+          "--role <role>   Filter by role (LLM-driven)",
           "--agent <name>  Use specific agent",
+          "--no-llm        Mechanical conversion only",
           "--dry-run       Preview prompt only",
         ],
       },
@@ -321,8 +325,8 @@ export const enUS = {
         number: "04",
         title: "Ingest & Distill",
         description:
-          "Tell your agent to process raw files into structured wiki pages. Distill your sessions into reusable best practices.",
-        code: `memex ingest\nmemex distill --latest --role backend`,
+          "Convert every transcript to structured markdown first, then let the agent ingest raw/ into the wiki. Drop a --role pass when you want role-based summaries.",
+        code: `memex distill                 # all sessions → raw/team/sessions/*.md\nmemex ingest                  # agent turns raw/ into wiki/\nmemex distill --latest --role backend   # optional: role-based pass`,
       },
       {
         number: "05",
