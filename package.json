@@ -19,7 +19,8 @@
     "release:major": "node scripts/release.mjs --bump major",
     "release:dry": "node scripts/release.mjs --dry-run",
     "release:no-agent": "node scripts/release.mjs --no-agent",
-    "release:changelogen": "changelogen --release --patch --publish"
+    "release:changelogen": "changelogen --release --patch --publish",
+    "docs:sync": "node .claude/skills/release-ai-memex-cli/scripts/sync-gh-pages.mjs"
   },
   "keywords": [
     "cli",
