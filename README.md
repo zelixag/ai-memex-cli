@@ -1,27 +1,44 @@
 # ai-memex-cli
 
-> A universal, lightweight CLI for building and maintaining persistent LLM wikis. Stop re-deriving solutions and give your AI coding agents a long-term memory.
+**English** · [简体中文](./README.zh-CN.md)
+
+> A small CLI that turns [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) into a daily workflow — have your AI agent **build and maintain** a persistent Markdown knowledge base that *compounds* instead of being re-derived every session.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://img.shields.io/npm/v/ai-memex-cli.svg)](https://www.npmjs.com/package/ai-memex-cli)
 
-Inspired by Andrej Karpathy's [LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f), `ai-memex-cli` provides the mechanical primitives needed to maintain a persistent, cross-referenced knowledge base. 
+## Why this exists
 
-**The core philosophy:** The CLI handles mechanical correctness (file structure, frontmatter, linting, fetching), while your AI Agent handles semantic correctness (reading, synthesizing, linking).
+Most RAG systems rediscover knowledge from scratch on every question — retrieve raw chunks, synthesize, throw it away. **Nothing compounds.** Karpathy's pattern proposes a different shape: the LLM incrementally builds and maintains a structured, interlinked Markdown wiki that sits *between* you and the raw sources. Cross-references are already there. Contradictions have already been flagged. The synthesis already reflects everything you've read.
+
+> **"Obsidian is the IDE; the LLM is the programmer; the wiki is the codebase."** — Karpathy
+
+This is the oldest idea in information management — Vannevar Bush's 1945 **Memex**. Bush's vision had one gap: *who does the maintenance?* LLMs fill that gap — they don't get bored updating cross-references, and they can touch 15 pages in one pass.
+
+**What this CLI is:** a set of *mechanical primitives* that make the pattern easy to live in — fetch sources, run ingest / query / lint, manage `raw/` · `wiki/` · `index.md` · `log.md` · `AGENTS.md`, distill real agent sessions back into the wiki, generate slash commands for whatever agent you use.
+
+**What it isn't:** a RAG system, an MCP memory server, or a black-box vector store. The CLI makes **zero LLM API calls**. It stages the right files and prompts; your local agent (Claude Code, Cursor, Codex, Gemini, …) does all the thinking. The wiki itself is plain Markdown in a git repo — you can read it, edit it, diff it, blame it.
 
 ---
 
-## Why ai-memex-cli?
+## What `memex` gives you
 
-AI coding agents (like Claude Code, Codex, and Cursor) are incredibly powerful, but they suffer from amnesia. Every new session starts from scratch. 
+### Core pipeline — the Karpathy pattern, mechanized
 
-While other tools attempt to solve this by running heavy background MCP servers or locking you into a single agent's ecosystem, `ai-memex-cli` takes a different approach:
+1. **Ingest** — `memex fetch` drops sources into `raw/` (URLs, sitemaps, DuckDuckGo keyword search, agent-delegated fetching). `memex ingest` then hands the `raw/` tree to your agent and has it integrate new material into the wiki: updating entity / concept pages, the index, and the log in one pass.
+2. **Distill** — > *"good answers can be filed back into the wiki as new pages"* (Karpathy). `memex distill` batch-converts every agent session you've ever had into structured Markdown under `raw/<scene>/sessions/`, ready to be re-ingested. This is the mechanism that makes **explorations compound alongside reading**.
+3. **Query** — `memex search` (keyword / BM25 across the vault) and `memex inject` (pull relevant pages into an agent prompt on demand).
+4. **Lint** — `memex lint` / `memex link-check`: orphans, broken `[[wikilinks]]`, missing frontmatter, stale cross-references — the periodic health-check Karpathy describes.
+5. **Schema you own** — `AGENTS.md` is your wiki's constitution, co-evolved between you and the LLM. `memex init` gives you a working default; edit it until it fits your domain.
+6. **Slash commands, everywhere** — `memex install-hooks` generates native `/memex:*` commands for Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Aider, and Continue.dev, so you can trigger the pipeline from inside any agent chat.
 
-1. **Universal Agent Support:** Works out-of-the-box with Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Aider, and more.
-2. **Session Distillation:** Automatically parse your agent's recent session history and extract reusable best practices into your wiki.
-3. **Terminal & Chat Integration:** Generate native slash commands (e.g., `/memex:ingest`) so you can trigger wiki updates directly from inside your agent's chat interface.
-4. **Built-in Web Crawler + Keyword Search:** Fetch documentation sites by URL, crawl via sitemap, or simply search by keywords — all converted to clean Markdown in your `raw/` folder.
-5. **Stateless & Secure:** The CLI itself makes **zero LLM API calls**. It simply constructs the right context and hands it off to your local agent process.
+### Advanced / experimental (not in Karpathy's original)
+
+These layer on top of the core pipeline and are **off by default**. Useful, but opinionated — treat them as experiments and start small.
+
+- **`memex watch --daemon --heal`** — long-lived background loop that runs `ingest → lint → ingest` until the wiki reaches zero issues. Convenient, but it burns agent tokens autonomously; try `memex watch --once` in the foreground first and only daemonize once you trust the loop on your vault.
+- **`memex context install`** — writes a marker-delimited "vault digest" block into your project's `CLAUDE.md` / `AGENTS.md` / `.cursor/rules/memex.mdc` so every new agent session opens with the wiki location and a scene summary already in context. This is agent-memory territory rather than Karpathy's pattern; before installing, decide whether it overlaps usefully with Cursor skills / CLAUDE.md you already maintain by hand.
+- **Cross-agent prompt layer** — eight agents covered via prompt templates rather than MCP. Works well on Claude Code / Codex / OpenCode; coverage quality varies by agent.
 
 ### How it compares to alternatives
 
@@ -30,7 +47,7 @@ While other tools attempt to solve this by running heavy background MCP servers 
 | **Architecture** | Stateless CLI + Agent Prompts | Standalone CLI (calls LLM API) | Claude Code Plugin | Pure Markdown Prompts | TypeScript MCP Server |
 | **Agent Support** | **Universal (8+ agents)** | Anthropic API only | Claude Code only | Claude Code only | MCP-compatible only |
 | **Web Fetching** | **Built-in crawler + Keyword search** | Single URL ingest | No | No | No |
-| **Session Distillation**| **Yes (Role-based)** | No | No | No | Yes (Background) |
+| **Session Distillation**| **Yes (batch, structured MD)** | No | No | No | Yes (Background) |
 | **Slash Commands** | **Auto-generated for all agents** | No | Built-in (plugin) | Manual setup | N/A |
 | **Interactive Onboarding** | **Yes (wizard)** | No | No | No | No |
 | **Self-Update** | **Yes (`memex update`)** | No | No | No | No |
@@ -121,23 +138,80 @@ The `ingest` command accepts **fuzzy paths** — your agent will search and reso
 
 ### 4. Distill Your Sessions
 
-Just finished a complex debugging session? Extract the best practices so you never have to solve it again.
+Just finished a complex debugging session? Convert every session file your agent has ever produced into structured Markdown, ready to be ingested.
 
 ```bash
-# Distill the latest session from your configured agent
-memex distill --latest --role backend
+# No-arg: batch-convert ALL sessions from your configured agent
+memex distill
 
-# Distill a specific session file
-memex distill ./chat-log.jsonl --role "tech-lead"
+# Pick the scene the sessions land in (default: team → raw/team/sessions/)
+memex distill --scene personal
 
-# Distill with a specific agent
-memex distill --latest --agent claude-code --role frontend
+# Skip the optional LLM summarization pass (pure structural conversion)
+memex distill --no-llm
+
+# Convert a specific file
+memex distill ./chat-log.jsonl
 
 # Dry-run to preview
-memex distill --latest --dry-run
+memex distill --dry-run
 ```
 
-The `--latest` flag automatically discovers the most recent session file from your agent's session directory (configured during onboard).
+Output goes to `raw/<scene>/sessions/*.md` with `source-type: session` frontmatter; each file is treated as one source document by `memex ingest`.
+
+That's the core loop. Everything past this point is **optional and opinionated** — added on top of Karpathy's pattern to solve specific pain points, but they trade simplicity for automation. Skim first, enable later.
+
+---
+
+## Advanced Workflows (optional, opinionated)
+
+These two capabilities are **not part of Karpathy's original pattern**. They address real pain points (unattended maintenance, session-start context) but introduce new trade-offs — autonomous token burn, overlap with existing agent rules. Read before enabling.
+
+### Continuous self-healing (`memex watch`)
+
+`memex watch` can run an `ingest → lint → ingest` loop in the background, triggered by `raw/` changes *and/or* periodic health checks. Useful once you trust how the agent behaves on your vault; expensive if you don't (the daemon drives real agent calls autonomously).
+
+```bash
+# Foreground watcher (one-shot ingest + lint)
+memex watch --once
+
+# Daemonized self-healing loop (unlimited iterations, periodic health checks)
+memex watch --daemon --heal
+
+# Observe the live state (phase, iteration, current files, remaining issues)
+memex watch --status
+
+# Tail the daemon log in real time (like `tail -f`)
+memex watch --follow
+
+# Stop the daemon
+memex watch --stop
+
+# Keep looping even when the agent appears stuck (bypass the no-progress guard)
+memex watch --daemon --force
+```
+
+The daemon records status to `.llmwiki/watch.status.json` and streams every ingest command + prompt head + agent stdout/stderr into `.llmwiki/watch.log`. Recommended first-run path: `memex watch --once` (foreground, single cycle) → inspect the log → only then consider `--daemon --heal`.
+
+### Session-start context bootstrap (`memex context`)
+
+`memex context install` writes a marker-delimited block into your project root's agent file so the vault location and a per-scene digest are in context from turn zero. This overlaps with what Cursor skills / a hand-maintained `CLAUDE.md` can already do — decide whether you want memex to own that region or leave it to you.
+
+```bash
+# Install the bootstrap block for the current project (auto-detects agent)
+memex context install
+
+# Refresh blocks across every project that has one registered
+memex context refresh --all
+
+# See where blocks are installed
+memex context status
+
+# Remove the block from the current project
+memex context uninstall
+```
+
+Target files depend on the agent (`CLAUDE.md` for Claude Code, `AGENTS.md` for Codex/OpenCode, `.cursor/rules/memex.mdc` for Cursor, `GEMINI.md` for Gemini CLI, etc.). The block is idempotent — only the marker-wrapped region is rewritten, your surrounding prose is preserved. `memex onboard` and `memex install-hooks` offer to install it automatically.
 
 ---
 
@@ -157,7 +231,8 @@ The `--latest` flag automatically discovers the most recent session file from yo
 │ Layer 2: ai-memex-cli                           │
 │  - Stateless primitives: onboard / fetch /      │
 │    ingest / distill / glob / inject / lint /    │
-│    search / update                              │
+│    search / update / context                    │
+│  - Self-healing daemon: watch (ingest ↔ lint)   │
 │  - Handles path resolution, web crawling, and   │
 │    frontmatter validation                       │
 └─────────────────────────────────────────────────┘
@@ -173,23 +248,32 @@ The `--latest` flag automatically discovers the most recent session file from yo
 
 ```
 ~/.llmwiki/global/
-├── AGENTS.md              # Agent instructions
-├── index.md               # Wiki index
-├── log.md                 # Chronological log
-├── config.yaml            # Vault configuration
-├── raw/                   # Unprocessed source material
-│   ├── research/          # Fetched docs, articles
+├── AGENTS.md              # Schema + workflow rules for the agent
+├── index.md               # Wiki index (maintained by agent during ingest)
+├── log.md                 # Append-only action log
+├── raw/                   # Immutable source material (agent never writes here)
 │   ├── personal/          # Personal notes
-│   └── reading/           # Reading material
-└── wiki/                  # Structured knowledge
-    ├── research/
-    │   ├── entities/      # People, tools, orgs
-    │   ├── concepts/      # Ideas, patterns
-    │   ├── sources/       # Reference citations
-    │   └── summaries/     # Synthesized overviews
-    └── personal/
-        └── ...
+│   ├── research/          # Fetched docs, articles (default for `memex fetch`)
+│   ├── reading/           # Reading material
+│   └── team/
+│       └── sessions/      # Distilled agent transcripts (default for `memex distill`)
+├── wiki/                  # Agent-maintained knowledge pages
+│   ├── personal/
+│   ├── research/
+│   ├── reading/
+│   └── team/
+│       ├── entities/      # People, tools, orgs (one per real-world object)
+│       ├── concepts/      # Ideas, patterns, methodologies
+│       ├── sources/       # One page per external document (URL, PDF…)
+│       └── summaries/     # Cross-page synthesis (subtype: overview/comparison/synthesis)
+└── .llmwiki/
+    ├── config.json        # Per-vault configuration (gitignored)
+    ├── watch.pid          # `memex watch --daemon` process id
+    ├── watch.log          # Self-healing daemon log (ingest cmd + prompt + agent stream)
+    └── watch.status.json  # Live status snapshot read by `memex watch --status`
 ```
+
+Two orthogonal dimensions classify every wiki page: **scene** (`personal` / `research` / `reading` / `team`) × **type** (`entity` / `concept` / `source` / `summary`). Physical path = `wiki/<scene>/<type>s/<slug>.md`; the `type:` frontmatter field uses the singular form.
 
 ---
 
@@ -199,10 +283,12 @@ The `--latest` flag automatically discovers the most recent session file from yo
 
 | Command | Description |
 |---------|-------------|
-| `memex onboard` | Interactive setup wizard — select agent, detect session dir, init vault, install hooks |
+| `memex onboard` | Interactive setup wizard — select agent, detect session dir, init vault, install hooks, install L0 context block |
 | `memex fetch <url\|keywords>` | Fetch URL, crawl sitemap, or search by keywords — saves clean Markdown to `raw/` |
-| `memex ingest [target]` | Orchestrate your agent to process raw sources into structured wiki pages |
-| `memex distill [session]` | Extract role-based best practices from agent session logs |
+| `memex ingest [target]` | Orchestrate your agent to process raw sources into structured wiki pages (accepts a lint report to drive self-healing) |
+| `memex distill [session]` | Batch-convert agent session files into structured Markdown under `raw/<scene>/sessions/` |
+| `memex watch` | Self-healing daemon: react to `raw/` changes + periodic health checks, drive `ingest ↔ lint` loop until converged |
+| `memex context <sub>` | Manage the session-start context block (`install` / `refresh` / `uninstall` / `status`) — L0 bootstrap for agent sessions |
 | `memex glob --project <dir>` | Project relevant global wiki pages into a local project vault |
 | `memex inject` | Output concatenated wiki context for agent consumption |
 | `memex search <query>` | Full-text search across wiki and raw files with relevance scoring |
@@ -257,12 +343,52 @@ memex ingest --dry-run          # Preview the prompt
 #### `memex distill`
 
 ```bash
-memex distill --latest                    # Latest session, auto-detect agent
-memex distill --latest --role backend     # Filter by role
-memex distill ./session.jsonl             # Specific file
-memex distill --latest --agent claude-code # Use specific agent
-memex distill --dry-run                   # Preview the prompt
+memex distill                        # Batch-convert ALL sessions from configured agent
+memex distill --scene personal       # Land sessions under raw/personal/sessions/
+memex distill --no-llm               # Skip the optional LLM summary pass
+memex distill ./session.jsonl        # Convert a specific file
+memex distill --agent claude-code    # Override agent (path auto-detected)
+memex distill --dry-run              # Preview the prompt without writing
 ```
+
+Each session becomes a Markdown file with YAML frontmatter (`source-type: session`, `started`, `ended`, `turns`, `sources`) plus per-turn `## 👤 User` / `## 🤖 Assistant` blocks. JSONL is **never** copied into the vault — the CLI reads from the agent's source dir and writes only the rendered Markdown.
+
+#### `memex watch`
+
+```bash
+# Trigger modes
+memex watch --once                     # Single ingest + lint then exit
+memex watch                            # Foreground continuous loop
+memex watch --daemon                   # Detached background daemon
+
+# Self-healing controls
+memex watch --daemon --max-iter 0      # Unlimited iterations (∞) — default
+memex watch --daemon --max-iter 5      # Cap per-batch at 5 loops
+memex watch --daemon --force           # Bypass the "no progress" guard
+memex watch --daemon --heal            # Also run periodic health checks
+memex watch --daemon --heal-interval 300000   # Health check every 5 min
+memex watch --daemon --no-heal-on-start       # Skip the startup health check
+
+# Observability
+memex watch --status                   # Structured snapshot: phase, iter, files, issues, stats
+memex watch --follow                   # tail -f the daemon log
+memex watch --stop                     # Kill the running daemon
+```
+
+The daemon writes `.llmwiki/watch.{pid,log,status.json}`. Every ingest round logs the full command line, prompt head, and agent's stdout/stderr stream; every lint round logs the structured issue list so `watch --follow` is a complete audit trail.
+
+#### `memex context`
+
+```bash
+memex context install                  # Write L0 block into project root (auto-detect agent)
+memex context install --agent cursor   # Target a specific agent's file
+memex context install --mode minimal   # Skip the wiki digest (vault location only)
+memex context refresh --all            # Rewrite blocks for every registered project
+memex context uninstall                # Remove the block from this project
+memex context status                   # List all registered projects + liveness check
+```
+
+The installed block is delimited by `<!-- memex:context:start -->` / `<!-- memex:context:end -->` — only the region between those markers is rewritten by `refresh`, preserving any surrounding prose. Registry lives at `~/.llmwiki/contexts.json`; `memex watch` / `memex ingest` silently call `refresh --all` after every clean lint pass so the digest stays current.
 
 #### `memex config`
 
@@ -296,9 +422,10 @@ If you ran `memex onboard` or `memex install-hooks`, you can trigger the CLI dir
 /memex:fetch https://docs.example.com # Fetch documentation
 /memex:fetch "react hooks tutorial"  # Search and fetch by keywords
 /memex:ingest raw/personal           # Process raw files
-/memex:distill --role frontend       # Distill session
+/memex:distill                       # Batch-convert all sessions
 /memex:search "authentication"       # Search knowledge base
 /memex:lint                          # Health check
+/memex:watch --daemon --heal         # Start self-healing daemon
 /memex:new concept "React Hooks"     # Create new page
 ```
 
@@ -360,7 +487,7 @@ pnpm build
 pnpm test
 ```
 
-We use Vitest for testing. The test suite covers all commands, core modules, and edge cases (86 test cases, 100% pass rate).
+We use Vitest for testing. The suite covers all commands, core modules, and edge cases — including a dedicated TDD spec for the wiki self-healing loop (`tests/core/ingest-lint-loop.test.ts`) that locks in 12 behavioral contracts (clean convergence, `lintReport` propagation across iterations, the no-progress guard, `--force` bypass, `stopSignal`, `skipFirstIngest`, reporter event ordering, unlimited iterations, and ingest-error resilience).
 
 ---
 

@@ -11,11 +11,22 @@
  *   - Loop stops when lint reports 0 issues, max iterations is reached, or the
  *     caller-supplied `stopSignal` flips true (e.g. Ctrl-C / watch --stop).
  */
-import { ingestCommand } from '../commands/ingest.js';
+import { ingestCommand, type IngestOptions } from '../commands/ingest.js';
 import { runLint, type LintReport } from '../commands/lint.js';
 import { contextCommand } from '../commands/context.js';
 import { logger } from '../utils/logger.js';
 import pc from 'picocolors';
+
+/**
+ * Minimal structural types for the ingest / lint collaborators. We accept
+ * anything shaped like the real implementations so tests can inject fakes
+ * without pulling the entire command surface into the test sandbox.
+ */
+export type IngestFn = (opts: IngestOptions, cwd: string) => Promise<void>;
+export type LintFn = (
+  opts: { vault: string },
+  cwd: string,
+) => Promise<LintReport>;
 
 export interface LoopReport {
   iteration: number;
@@ -56,6 +67,22 @@ export interface IngestLintLoopOptions {
    * file / UI.
    */
   reporter?: LoopReporter;
+  /**
+   * Inject a custom ingest implementation. Defaults to the real
+   * `ingestCommand`. Tests use this to observe what lintReport is being
+   * propagated across iterations without spawning an actual agent.
+   */
+  ingestFn?: IngestFn;
+  /**
+   * Inject a custom lint implementation. Defaults to the real `runLint`.
+   * Tests script a sequence of reports to drive specific branches.
+   */
+  lintFn?: LintFn;
+  /**
+   * When true, skip the "after-clean" L0 context refresh side-effect. Tests
+   * set this so they don't touch `~/.llmwiki/contexts.json`.
+   */
+  skipContextRefresh?: boolean;
 }
 
 export interface IngestLintLoopResult {
@@ -67,6 +94,9 @@ export interface IngestLintLoopResult {
 export async function runIngestLintLoop(
   opts: IngestLintLoopOptions,
 ): Promise<IngestLintLoopResult> {
+  const ingestFn: IngestFn = opts.ingestFn ?? ingestCommand;
+  const lintFn: LintFn = opts.lintFn ?? ((o, cwd) => runLint(o, cwd));
+
   // 0 / negative / Infinity → treat as "no cap".
   const rawMax = opts.maxIter ?? 3;
   const max =
@@ -91,7 +121,7 @@ export async function runIngestLintLoop(
       logger.info(label);
       opts.reporter?.({ iteration: i, maxLabel, phase: 'ingest', fixing });
       try {
-        await ingestCommand(
+        await ingestFn(
           {
             target: opts.target,
             agent: opts.agent,
@@ -116,12 +146,14 @@ export async function runIngestLintLoop(
     logger.info(pc.cyan(`[loop] iter ${i}/${maxLabel} · lint`));
     logger.info(`[lint] vault=${opts.vault} checks=orphans,broken-links,missing-frontmatter`);
     opts.reporter?.({ iteration: i, maxLabel, phase: 'lint' });
-    const report = await runLint({ vault: opts.vault }, opts.cwd);
+    const report = await lintFn({ vault: opts.vault }, opts.cwd);
     opts.reporter?.({ iteration: i, maxLabel, phase: 'lint-done', issues: report.issues.length });
     if (report.issues.length === 0) {
       logger.success('[loop] lint clean — knowledge base is consistent.');
       opts.reporter?.({ iteration: i, maxLabel, phase: 'clean', issues: 0 });
-      await silentRefreshContexts(opts.vault, opts.cwd);
+      if (!opts.skipContextRefresh) {
+        await silentRefreshContexts(opts.vault, opts.cwd);
+      }
       return { iterations: i, stopped: 'clean', finalReport: report };
     }
 
@@ -146,7 +178,7 @@ export async function runIngestLintLoop(
   }
 
   const finalReport =
-    lastReport ?? (await runLint({ vault: opts.vault }, opts.cwd));
+    lastReport ?? (await lintFn({ vault: opts.vault }, opts.cwd));
   if (stopped === 'signal') {
     logger.warn('[loop] stopped by signal.');
   } else {
