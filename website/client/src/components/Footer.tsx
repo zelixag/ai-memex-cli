@@ -1,14 +1,18 @@
 /*
- * Design: Knowledge Cartography — Scholarly footer with ornamental styling
+ * Design: Knowledge Cartography — Scholarly footer
  */
 import { Terminal, Github, ExternalLink } from "lucide-react";
+import { useI18n } from "@/i18n";
 
 export default function Footer() {
+  const { messages } = useI18n();
+  const f = messages.footer;
+  const navLinks = messages.navbar.links;
+
   return (
     <footer className="bg-ink text-ivory/80 py-16">
       <div className="container">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-10 mb-12">
-          {/* Brand */}
           <div className="md:col-span-1">
             <div className="flex items-center gap-2.5 mb-4">
               <div className="w-9 h-9 rounded-lg bg-terracotta flex items-center justify-center">
@@ -24,23 +28,16 @@ export default function Footer() {
               </div>
             </div>
             <p className="text-sm text-ivory/50 leading-relaxed font-[var(--font-body)]">
-              Persistent memory for AI agents. Inspired by Karpathy's LLM Wiki pattern.
+              {f.tagline}
             </p>
           </div>
 
-          {/* Quick Links */}
           <div>
             <h4 className="text-xs font-bold text-ivory/40 uppercase tracking-widest mb-4 font-[var(--font-body)]">
-              Navigation
+              {f.navTitle}
             </h4>
             <ul className="space-y-2">
-              {[
-                { label: "Features", href: "#features" },
-                { label: "Architecture", href: "#architecture" },
-                { label: "Commands", href: "#commands" },
-                { label: "Comparison", href: "#comparison" },
-                { label: "Quick Start", href: "#quickstart" },
-              ].map((link) => (
+              {navLinks.map((link) => (
                 <li key={link.href}>
                   <a
                     href={link.href}
@@ -53,10 +50,9 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Supported Agents */}
           <div>
             <h4 className="text-xs font-bold text-ivory/40 uppercase tracking-widest mb-4 font-[var(--font-body)]">
-              Supported Agents
+              {f.agentsTitle}
             </h4>
             <ul className="space-y-2">
               {[
@@ -75,10 +71,9 @@ export default function Footer() {
             </ul>
           </div>
 
-          {/* Resources */}
           <div>
             <h4 className="text-xs font-bold text-ivory/40 uppercase tracking-widest mb-4 font-[var(--font-body)]">
-              Resources
+              {f.resourcesTitle}
             </h4>
             <ul className="space-y-2">
               <li>
@@ -89,7 +84,7 @@ export default function Footer() {
                   className="text-sm text-ivory/60 hover:text-terracotta-light transition-colors inline-flex items-center gap-1.5 font-[var(--font-body)]"
                 >
                   <Github className="w-3.5 h-3.5" />
-                  GitHub Repository
+                  {f.githubRepo}
                 </a>
               </li>
               <li>
@@ -100,7 +95,7 @@ export default function Footer() {
                   className="text-sm text-ivory/60 hover:text-terracotta-light transition-colors inline-flex items-center gap-1.5 font-[var(--font-body)]"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  npm Package
+                  {f.npmPackage}
                 </a>
               </li>
               <li>
@@ -111,12 +106,11 @@ export default function Footer() {
                   className="text-sm text-ivory/60 hover:text-terracotta-light transition-colors inline-flex items-center gap-1.5 font-[var(--font-body)]"
                 >
                   <ExternalLink className="w-3.5 h-3.5" />
-                  Karpathy's LLM Wiki Gist
+                  {f.karpathyGist}
                 </a>
               </li>
             </ul>
 
-            {/* Install command */}
             <div className="mt-6 p-3 rounded-lg bg-ivory/5 border border-ivory/10">
               <code className="text-xs font-[var(--font-mono)] text-gold/80">
                 $ npm install -g ai-memex-cli
@@ -125,14 +119,9 @@ export default function Footer() {
           </div>
         </div>
 
-        {/* Bottom bar */}
         <div className="border-t border-ivory/10 pt-6 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <p className="text-xs text-ivory/30 font-[var(--font-body)]">
-            MIT License &copy; 2026. Built with care for the AI agent ecosystem.
-          </p>
-          <p className="text-xs text-ivory/20 font-[var(--font-mono)]">
-            v1.0.0
-          </p>
+          <p className="text-xs text-ivory/30 font-[var(--font-body)]">{f.license}</p>
+          <p className="text-xs text-ivory/20 font-[var(--font-mono)]">{f.version}</p>
         </div>
       </div>
     </footer>

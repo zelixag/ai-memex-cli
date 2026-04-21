@@ -1,20 +1,25 @@
 /*
  * Design: Knowledge Cartography — Hero with cartographer's desk background
- * Large display typography, warm tones, scholarly feel
  */
 import { motion } from "framer-motion";
 import { ArrowDown, Terminal, Sparkles } from "lucide-react";
+import { useI18n } from "@/i18n";
 
-const HERO_IMG = "https://d2xsxph8kpxj0f.cloudfront.net/310519663089592650/8gUpxoXV9ibnL63toqcSZM/hero-map_439eb193.png";
+const HERO_IMG =
+  "https://d2xsxph8kpxj0f.cloudfront.net/310519663089592650/8gUpxoXV9ibnL63toqcSZM/hero-map_439eb193.png";
+const KARPATHY_GIST =
+  "https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f";
 
 export default function HeroSection() {
+  const { messages } = useI18n();
+  const h = messages.hero;
+
   return (
     <section className="relative min-h-[92vh] flex items-center overflow-hidden">
-      {/* Background image with overlay */}
       <div className="absolute inset-0">
         <img
           src={HERO_IMG}
-          alt="Knowledge cartography desk"
+          alt={h.imgAlt}
           className="w-full h-full object-cover"
         />
         <div className="absolute inset-0 bg-gradient-to-r from-ivory/95 via-ivory/85 to-ivory/60" />
@@ -23,7 +28,6 @@ export default function HeroSection() {
 
       <div className="container relative z-10 pt-24 pb-16">
         <div className="max-w-2xl">
-          {/* Badge */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -32,34 +36,53 @@ export default function HeroSection() {
           >
             <Sparkles className="w-3.5 h-3.5 text-sage" />
             <span className="text-xs font-semibold text-sage tracking-wide uppercase font-[var(--font-body)]">
-              Inspired by Karpathy's LLM Wiki
+              {h.badge}
             </span>
           </motion.div>
 
-          {/* Main heading */}
           <motion.h1
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
             className="font-[var(--font-display)] text-5xl sm:text-6xl lg:text-7xl font-bold text-ink leading-[1.1] mb-6"
           >
-            Persistent Memory
+            {h.titleLine1}
             <br />
-            <span className="text-terracotta italic">for AI Agents</span>
+            <span className="text-terracotta italic">{h.titleLine2}</span>
           </motion.h1>
 
-          {/* Subtitle */}
           <motion.p
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.2 }}
-            className="text-lg sm:text-xl text-foreground/70 leading-relaxed mb-8 max-w-xl font-[var(--font-body)]"
+            className="text-lg sm:text-xl text-foreground/70 leading-relaxed mb-6 max-w-xl font-[var(--font-body)]"
           >
-            The universal CLI that builds structured knowledge wikis from raw documents and conversations.
-            Works with <strong className="text-ink">Claude Code</strong>, <strong className="text-ink">Codex</strong>, <strong className="text-ink">Cursor</strong>, and 5+ more agents.
+            {h.subtitleBefore}
+            <a
+              href={KARPATHY_GIST}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-ink underline decoration-terracotta/40 hover:decoration-terracotta"
+            >
+              {h.subtitleLink}
+            </a>
+            {h.subtitleAfter}
           </motion.p>
 
-          {/* Install command */}
+          <motion.blockquote
+            initial={{ opacity: 0, y: 30 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, delay: 0.25 }}
+            className="border-l-2 border-terracotta/40 pl-4 mb-8 max-w-xl"
+          >
+            <p className="text-sm text-foreground/60 italic font-[var(--font-body)] leading-relaxed">
+              {h.quote}
+            </p>
+            <cite className="text-xs text-foreground/40 not-italic font-[var(--font-body)]">
+              {h.quoteAuthor}
+            </cite>
+          </motion.blockquote>
+
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -73,16 +96,18 @@ export default function HeroSection() {
                 npm install -g ai-memex-cli
               </code>
               <button
-                onClick={() => navigator.clipboard.writeText("npm install -g ai-memex-cli")}
+                type="button"
+                onClick={() =>
+                  navigator.clipboard.writeText("npm install -g ai-memex-cli")
+                }
                 className="ml-2 text-ivory/40 hover:text-ivory/80 transition-colors text-xs"
-                title="Copy to clipboard"
+                title={h.copyTitle}
               >
-                Copy
+                {h.copy}
               </button>
             </div>
           </motion.div>
 
-          {/* CTA buttons */}
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
@@ -93,7 +118,7 @@ export default function HeroSection() {
               href="#quickstart"
               className="px-6 py-3 bg-terracotta text-ivory font-semibold rounded-md hover:bg-terracotta-light transition-all shadow-md hover:shadow-lg text-sm"
             >
-              Quick Start Guide
+              {h.quickStart}
             </a>
             <a
               href="https://github.com/zelixag/ai-memex-cli"
@@ -101,13 +126,12 @@ export default function HeroSection() {
               rel="noopener noreferrer"
               className="px-6 py-3 bg-transparent text-ink font-semibold rounded-md border-2 border-ink/20 hover:border-terracotta hover:text-terracotta transition-all text-sm"
             >
-              View on GitHub
+              {h.viewGithub}
             </a>
           </motion.div>
         </div>
       </div>
 
-      {/* Scroll indicator */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}

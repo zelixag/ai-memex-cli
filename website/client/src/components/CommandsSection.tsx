@@ -1,156 +1,88 @@
 /*
  * Design: Knowledge Cartography — Command reference with tabbed interface
- * Warm code blocks, categorized commands
  */
-import { useState } from "react";
+import { useState, type ElementType } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Compass, Globe, FileInput, Beaker, Grid3x3, Syringe,
   Search, AlertTriangle, FolderPlus, FilePlus, ScrollText,
   BarChart3, Link2, Settings, RefreshCw, Rocket,
+  Activity, Layers,
 } from "lucide-react";
+import { useI18n } from "@/i18n";
 
-type Command = {
+const CORE_ORDER = [
+  "onboard",
+  "fetch",
+  "ingest",
+  "distill",
+  "watch",
+  "glob",
+  "inject",
+  "search",
+  "lint",
+] as const;
+
+const UTIL_ORDER = [
+  "init",
+  "new",
+  "log",
+  "status",
+  "link-check",
+  "context",
+  "install-hooks",
+  "config",
+  "update",
+] as const;
+
+type CoreKey = (typeof CORE_ORDER)[number];
+type UtilKey = (typeof UTIL_ORDER)[number];
+
+const CORE_ICONS: Record<CoreKey, ElementType> = {
+  onboard: Rocket,
+  fetch: Globe,
+  ingest: FileInput,
+  distill: Beaker,
+  watch: Activity,
+  glob: Grid3x3,
+  inject: Syringe,
+  search: Search,
+  lint: AlertTriangle,
+};
+
+const UTIL_ICONS: Record<UtilKey, ElementType> = {
+  init: FolderPlus,
+  new: FilePlus,
+  log: ScrollText,
+  status: BarChart3,
+  "link-check": Link2,
+  context: Layers,
+  "install-hooks": Compass,
+  config: Settings,
+  update: RefreshCw,
+};
+
+type CommandView = {
   name: string;
-  icon: React.ElementType;
+  icon: ElementType;
   desc: string;
   usage: string;
   flags?: string[];
 };
 
-const coreCommands: Command[] = [
-  {
-    name: "onboard",
-    icon: Rocket,
-    desc: "Interactive setup wizard — select agent, detect session dir, init vault, install hooks.",
-    usage: "memex onboard\nmemex onboard --agent claude-code -y",
-    flags: ["--agent <name>  Specify agent (skip selection)", "-y  Non-interactive mode"],
-  },
-  {
-    name: "fetch",
-    icon: Globe,
-    desc: "Fetch URL, crawl sitemap, or search by keywords — saves clean Markdown to raw/.",
-    usage: 'memex fetch https://react.dev/reference/react/hooks\nmemex fetch "react hooks best practices" --top 5\nmemex fetch https://nextjs.org/sitemap.xml --sitemap',
-    flags: [
-      "--depth <n>     Recursive crawl depth",
-      "--sitemap       Crawl via sitemap.xml",
-      "--max-pages <n> Limit pages to crawl",
-      "--top <n>       Limit keyword search results",
-      "--yes           Auto-fetch all results",
-      "--agent <name>  Delegate to agent",
-      "--scene <name>  Target scene folder",
-    ],
-  },
-  {
-    name: "ingest",
-    icon: FileInput,
-    desc: "Orchestrate your agent to process raw sources into structured wiki pages.",
-    usage: "memex ingest\nmemex ingest raw/personal\nmemex ingest --agent codex --dry-run",
-    flags: ["--agent <name>  Use specific agent", "--dry-run       Preview prompt only"],
-  },
-  {
-    name: "distill",
-    icon: Beaker,
-    desc: "Extract role-based best practices from agent session logs.",
-    usage: "memex distill --latest --role backend\nmemex distill ./session.jsonl --role tech-lead",
-    flags: [
-      "--latest        Use most recent session",
-      "--role <role>   Filter by role",
-      "--agent <name>  Use specific agent",
-      "--dry-run       Preview prompt only",
-    ],
-  },
-  {
-    name: "glob",
-    icon: Grid3x3,
-    desc: "Project relevant global wiki pages into a local project vault.",
-    usage: "memex glob --project ./my-app",
-    flags: ["--project <dir>  Target project directory"],
-  },
-  {
-    name: "inject",
-    icon: Syringe,
-    desc: "Output concatenated wiki context for agent consumption.",
-    usage: "memex inject\nmemex inject --format json",
-    flags: ["--format <fmt>  Output format (text/json)"],
-  },
-  {
-    name: "search",
-    icon: Search,
-    desc: "Full-text search across wiki and raw files with relevance scoring.",
-    usage: 'memex search "authentication"\nmemex search "react hooks" --limit 10',
-    flags: ["--limit <n>  Max results"],
-  },
-  {
-    name: "lint",
-    icon: AlertTriangle,
-    desc: "Scan wiki health — orphans, broken links, missing frontmatter.",
-    usage: "memex lint\nmemex lint --fix",
-    flags: ["--fix  Auto-fix simple issues"],
-  },
-];
-
-const utilCommands: Command[] = [
-  {
-    name: "init",
-    icon: FolderPlus,
-    desc: "Initialize a new vault manually.",
-    usage: "memex init\nmemex init --global",
-    flags: ["--global  Initialize global vault"],
-  },
-  {
-    name: "new",
-    icon: FilePlus,
-    desc: "Scaffold a new wiki page from a template.",
-    usage: 'memex new concept "React Hooks"\nmemex new entity "Anthropic"',
-    flags: ["<type>  entity | concept | source | summary", "<name>  Page name"],
-  },
-  {
-    name: "log",
-    icon: ScrollText,
-    desc: "Append a formatted entry to the chronological log.md.",
-    usage: 'memex log "Refactored auth module"',
-  },
-  {
-    name: "status",
-    icon: BarChart3,
-    desc: "View vault overview and statistics.",
-    usage: "memex status\nmemex status --json",
-    flags: ["--json  Output as JSON"],
-  },
-  {
-    name: "link-check",
-    icon: Link2,
-    desc: "Validate [[wikilinks]] across all pages.",
-    usage: "memex link-check",
-  },
-  {
-    name: "install-hooks",
-    icon: Compass,
-    desc: "Generate custom slash commands for your agent.",
-    usage: "memex install-hooks\nmemex install-hooks --agent cursor",
-    flags: ["--agent <name>  Target agent"],
-  },
-  {
-    name: "config",
-    icon: Settings,
-    desc: "Manage CLI configuration and default agent.",
-    usage: "memex config list\nmemex config set agent codex\nmemex config agents",
-    flags: ["set <key> <val>  Set a config value", "get <key>        Get a config value", "list             Show all config", "agents           List supported agents"],
-  },
-  {
-    name: "update",
-    icon: RefreshCw,
-    desc: "Self-update to the latest version.",
-    usage: "memex update\nmemex update --check\nmemex update --source github",
-    flags: ["--check          Only check for updates", "--source <src>   Force npm or github"],
-  },
-];
-
-function CommandCard({ cmd, isActive, onClick }: { cmd: Command; isActive: boolean; onClick: () => void }) {
+function CommandCard({
+  cmd,
+  isActive,
+  onClick,
+}: {
+  cmd: CommandView;
+  isActive: boolean;
+  onClick: () => void;
+}) {
   const Icon = cmd.icon;
   return (
     <button
+      type="button"
       onClick={onClick}
       className={`w-full text-left px-4 py-3 rounded-lg transition-all flex items-center gap-3 ${
         isActive
@@ -160,7 +92,9 @@ function CommandCard({ cmd, isActive, onClick }: { cmd: Command; isActive: boole
     >
       <Icon className={`w-4 h-4 shrink-0 ${isActive ? "text-terracotta" : "text-foreground/40"}`} />
       <div>
-        <span className={`text-sm font-[var(--font-mono)] font-semibold ${isActive ? "text-terracotta" : "text-ink"}`}>
+        <span
+          className={`text-sm font-[var(--font-mono)] font-semibold ${isActive ? "text-terracotta" : "text-ink"}`}
+        >
           {cmd.name}
         </span>
       </div>
@@ -168,7 +102,7 @@ function CommandCard({ cmd, isActive, onClick }: { cmd: Command; isActive: boole
   );
 }
 
-function CommandDetail({ cmd }: { cmd: Command }) {
+function CommandDetail({ cmd, optionsLabel }: { cmd: CommandView; optionsLabel: string }) {
   return (
     <motion.div
       key={cmd.name}
@@ -199,14 +133,16 @@ function CommandDetail({ cmd }: { cmd: Command }) {
       {cmd.flags && cmd.flags.length > 0 && (
         <div>
           <div className="text-xs font-semibold text-foreground/40 uppercase tracking-widest mb-2 font-[var(--font-body)]">
-            Options
+            {optionsLabel}
           </div>
           <div className="space-y-1">
             {cmd.flags.map((flag, i) => (
               <div key={i} className="text-sm font-[var(--font-mono)] text-foreground/60">
                 <span className="text-sage">{flag.split("  ")[0]}</span>
                 {flag.includes("  ") && (
-                  <span className="text-foreground/40 ml-2">{flag.split("  ").slice(1).join("  ")}</span>
+                  <span className="text-foreground/40 ml-2">
+                    {flag.split("  ").slice(1).join("  ")}
+                  </span>
                 )}
               </div>
             ))}
@@ -218,38 +154,62 @@ function CommandDetail({ cmd }: { cmd: Command }) {
 }
 
 export default function CommandsSection() {
+  const { messages } = useI18n();
+  const c = messages.commands;
+
+  const coreCommands: CommandView[] = CORE_ORDER.map((key) => {
+    const entry = c.core[key];
+    return {
+      name: key,
+      icon: CORE_ICONS[key],
+      desc: entry.desc,
+      usage: entry.usage,
+      flags: entry.flags,
+    };
+  });
+
+  const utilCommands: CommandView[] = UTIL_ORDER.map((key) => {
+    const entry = c.util[key];
+    return {
+      name: key,
+      icon: UTIL_ICONS[key],
+      desc: entry.desc,
+      usage: entry.usage,
+      flags: entry.flags,
+    };
+  });
+
   const [tab, setTab] = useState<"core" | "utility">("core");
   const commands = tab === "core" ? coreCommands : utilCommands;
-  const [activeCmd, setActiveCmd] = useState(commands[0].name);
+  const [activeCmd, setActiveCmd] = useState(commands[0]!.name);
 
-  const currentCmd = commands.find((c) => c.name === activeCmd) || commands[0];
+  const currentCmd = commands.find((x) => x.name === activeCmd) ?? commands[0]!;
 
   const handleTabChange = (newTab: "core" | "utility") => {
     setTab(newTab);
     const cmds = newTab === "core" ? coreCommands : utilCommands;
-    setActiveCmd(cmds[0].name);
+    setActiveCmd(cmds[0]!.name);
   };
 
   return (
     <section id="commands" className="py-24 bg-parchment parchment-bg">
       <div className="container relative z-10">
-        {/* Section header */}
         <div className="text-center mb-16">
           <div className="ornament-divider justify-center mb-6">
             <span className="ornament-symbol">&#9674;</span>
           </div>
           <h2 className="font-[var(--font-display)] text-4xl sm:text-5xl font-bold text-ink mb-4">
-            Command Reference
+            {c.sectionTitle}
           </h2>
           <p className="text-lg text-foreground/60 max-w-2xl mx-auto font-[var(--font-body)]">
-            16 commands covering the full lifecycle of knowledge management — from fetching to linting.
+            {c.sectionSubtitle}
           </p>
         </div>
 
-        {/* Tab switcher */}
         <div className="flex justify-center mb-10">
           <div className="inline-flex bg-ivory rounded-lg p-1 border border-border/60">
             <button
+              type="button"
               onClick={() => handleTabChange("core")}
               className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
                 tab === "core"
@@ -257,9 +217,10 @@ export default function CommandsSection() {
                   : "text-foreground/60 hover:text-ink"
               }`}
             >
-              Core Commands ({coreCommands.length})
+              {c.coreTab(coreCommands.length)}
             </button>
             <button
+              type="button"
               onClick={() => handleTabChange("utility")}
               className={`px-5 py-2 rounded-md text-sm font-semibold transition-all ${
                 tab === "utility"
@@ -267,14 +228,12 @@ export default function CommandsSection() {
                   : "text-foreground/60 hover:text-ink"
               }`}
             >
-              Utility Commands ({utilCommands.length})
+              {c.utilTab(utilCommands.length)}
             </button>
           </div>
         </div>
 
-        {/* Command browser */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* Command list */}
           <div className="lg:col-span-4">
             <div className="bg-ivory/80 rounded-xl border border-border/60 p-3 space-y-1 max-h-[520px] overflow-y-auto">
               {commands.map((cmd) => (
@@ -288,11 +247,10 @@ export default function CommandsSection() {
             </div>
           </div>
 
-          {/* Command detail */}
           <div className="lg:col-span-8">
             <div className="bg-ivory/80 rounded-xl border border-border/60 p-6 min-h-[520px]">
               <AnimatePresence mode="wait">
-                <CommandDetail cmd={currentCmd} />
+                <CommandDetail cmd={currentCmd} optionsLabel={c.options} />
               </AnimatePresence>
             </div>
           </div>

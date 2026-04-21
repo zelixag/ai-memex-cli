@@ -1,25 +1,26 @@
 /*
- * Design: Knowledge Cartography — warm parchment + ink + terracotta
- * Navbar: Horizontal top bar with ornamental styling, scholarly feel
+ * Design: Knowledge Cartography — Navbar with language toggle
  */
 import { useState } from "react";
-import { Menu, X, Github, Terminal } from "lucide-react";
-
-const navLinks = [
-  { label: "Features", href: "#features" },
-  { label: "Architecture", href: "#architecture" },
-  { label: "Commands", href: "#commands" },
-  { label: "Comparison", href: "#comparison" },
-  { label: "Quick Start", href: "#quickstart" },
-];
+import { Menu, X, Github, Terminal, Languages } from "lucide-react";
+import { useI18n, type Locale } from "@/i18n";
 
 export default function Navbar() {
+  const { locale, setLocale, messages } = useI18n();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navLinks = messages.navbar.links;
+  const ui = messages.ui;
+
+  const toggleLocale = () => {
+    setLocale(locale === "en-US" ? "zh-CN" : "en-US");
+  };
+
+  const otherLocale: Locale = locale === "en-US" ? "zh-CN" : "en-US";
+  const otherLabel = otherLocale === "zh-CN" ? ui.switchToZh : ui.switchToEn;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-ivory/90 backdrop-blur-md border-b border-border">
       <div className="container flex items-center justify-between h-16">
-        {/* Logo */}
         <a href="#" className="flex items-center gap-2.5 group">
           <div className="w-9 h-9 rounded-lg bg-terracotta flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
             <Terminal className="w-5 h-5 text-ivory" />
@@ -34,7 +35,6 @@ export default function Navbar() {
           </div>
         </a>
 
-        {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-8">
           {navLinks.map((link) => (
             <a
@@ -47,8 +47,17 @@ export default function Navbar() {
           ))}
         </div>
 
-        {/* CTA */}
         <div className="hidden md:flex items-center gap-3">
+          <button
+            type="button"
+            onClick={toggleLocale}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md border border-border/60 text-xs font-semibold text-foreground/70 hover:text-terracotta hover:border-terracotta/40 transition-colors"
+            aria-label={ui.languageToggleAria}
+            title={ui.languageToggleAria}
+          >
+            <Languages className="w-3.5 h-3.5" />
+            {otherLabel}
+          </button>
           <a
             href="https://github.com/zelixag/ai-memex-cli"
             target="_blank"
@@ -56,26 +65,26 @@ export default function Navbar() {
             className="flex items-center gap-2 text-sm text-foreground/70 hover:text-foreground transition-colors"
           >
             <Github className="w-4 h-4" />
-            GitHub
+            {messages.navbar.github}
           </a>
           <a
             href="#quickstart"
             className="px-4 py-2 bg-terracotta text-ivory text-sm font-semibold rounded-md hover:bg-terracotta-light transition-colors shadow-sm"
           >
-            Get Started
+            {messages.navbar.getStarted}
           </a>
         </div>
 
-        {/* Mobile Toggle */}
         <button
+          type="button"
           className="md:hidden p-2 text-foreground"
           onClick={() => setMobileOpen(!mobileOpen)}
+          aria-label="Menu"
         >
           {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
       </div>
 
-      {/* Mobile Menu */}
       {mobileOpen && (
         <div className="md:hidden bg-ivory border-t border-border">
           <div className="container py-4 flex flex-col gap-3">
@@ -89,6 +98,17 @@ export default function Navbar() {
                 {link.label}
               </a>
             ))}
+            <button
+              type="button"
+              onClick={() => {
+                toggleLocale();
+                setMobileOpen(false);
+              }}
+              className="text-left text-sm font-medium text-foreground/70 hover:text-terracotta py-2 flex items-center gap-2"
+            >
+              <Languages className="w-4 h-4" />
+              {otherLabel}
+            </button>
             <a
               href="https://github.com/zelixag/ai-memex-cli"
               target="_blank"
@@ -96,7 +116,7 @@ export default function Navbar() {
               className="flex items-center gap-2 text-sm text-foreground/70 py-2"
             >
               <Github className="w-4 h-4" />
-              GitHub
+              {messages.navbar.github}
             </a>
           </div>
         </div>
