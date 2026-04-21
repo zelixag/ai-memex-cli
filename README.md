@@ -489,6 +489,8 @@ pnpm test
 
 We use Vitest for testing. The suite covers all commands, core modules, and edge cases — including a dedicated TDD spec for the wiki self-healing loop (`tests/core/ingest-lint-loop.test.ts`) that locks in 12 behavioral contracts (clean convergence, `lintReport` propagation across iterations, the no-progress guard, `--force` bypass, `stopSignal`, `skipFirstIngest`, reporter event ordering, unlimited iterations, and ingest-error resilience).
 
+Maintainers cutting a new npm release should read [`CONTRIBUTING.md`](./CONTRIBUTING.md).
+
 ---
 
 ## License

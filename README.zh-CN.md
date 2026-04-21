@@ -494,6 +494,8 @@ pnpm test
 
 我们使用 Vitest 做测试。测试覆盖所有命令、核心模块和边界 case —— 其中为 wiki 自愈循环单独写了一份 TDD 规约（`tests/core/ingest-lint-loop.test.ts`），锁定了 12 条行为契约（洁净收敛、`lintReport` 在迭代间传递、无进展保护、`--force` 旁路、`stopSignal`、`skipFirstIngest`、reporter 事件顺序、无限迭代、以及 ingest 错误时的韧性）。
 
+维护者发布新 npm 版本前请阅读 [`CONTRIBUTING.md`](./CONTRIBUTING.md)。
+
 ---
 
 ## 许可证
