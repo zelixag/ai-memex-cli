@@ -4,13 +4,20 @@
 
 **首次增量发版前（只需一次）**：在当前基线提交上打标签，之后新版本只会统计该标签之后的提交：`git tag v0.1.0` 并 `git push origin v0.1.0`（若尚未打过 `v0.1.0`）。
 
-## Unreleased
+## v0.1.5
 
 ### 🚀 Enhancements
 
 - `memex watch --daemon` 现在每轮把 **完整的 ingest 命令行 + prompt 头 40 行 + agent 实时 stdout/stderr** 打到 `.llmwiki/watch.log`，不再只有一条 "ingest complete" 摘要。
 - `memex watch` 在 Windows 后台运行时不再为每次 ingest 弹出黑色 `claude` 控制台窗口（`runCommandStreamed` 加 `windowsHide: true`，只在必要时走 shell）。
 - `runIngestLintLoop`（wiki 自愈循环核心）重构为可注入 `ingestFn` / `lintFn` / `skipContextRefresh`，生产默认行为零变化，首次具备可单元测试的控制流。
+
+### 📦 Release tooling & Docs
+
+- 新增 `scripts/release.mjs`：10 步自动化发版管线（preflight → agent 同步 docs → human review → version bump → build → rebuild docs/ → tests → git commit+tag → pnpm publish → 可选 push），支持 `--dry-run` / `--no-agent` / `--rebuild-docs` / `--no-rebuild-docs` 等开关；Windows 下通过 `resolvePnpmEntry()` 绕过 cmd.exe shim，规避 libuv `process_title` assertion。
+- 新增 `CONTRIBUTING.md`：双语 maintainer 指南，涵盖发版流程、SemVer 规则、开发环境、Windows 注意事项。
+- `README.md` 围绕 Karpathy 的 [LLM Wiki pattern] 重新叙事，强调"为 LLM agent 提供持久领域记忆"作为核心定位；新增 `README.zh-CN.md`（简体中文版）并做语言切换。
+- 新增 `website/`：React + Vite 编写的文档站源码（之前仓库里只有 `docs/` 构建产物，现在源码入库，发布流程可自动重建）。
 
 ### 🧪 Tests
 
@@ -19,6 +26,15 @@
 ### 🩹 Fixes
 
 - `runCommandStreamed` 在 Windows 上只对 `.cmd/.bat/.ps1` 启用 shell 解析，避免 detached daemon 对每个子进程新建控制台。
+
+### 🪟 Known issues (Windows)
+
+以下 7 个测试在 Windows 平台失败，**均为 pre-existing，不是 0.1.5 引入的 regression**，已记为 **v0.1.6 首要修复目标**：
+
+- `tests/utils/fs.test.ts` × 3：断言期望值硬编码为 Unix 风格路径 / 反斜杠，与 `normalizePath` "始终返回 POSIX 正斜杠" 的契约不一致；需要修测试期望值。
+- `tests/commands/search.test.ts` × 4：temp vault 下 `searchCommand` 返回 `No results`，怀疑是 glob pattern 在 `C:/Users/…` 路径上的匹配问题或 fixture helper 的平台差异，需要定位。
+
+Unix 平台（macOS / Linux / CI）上述测试应为绿色。
 
 ## v0.1.3
 
