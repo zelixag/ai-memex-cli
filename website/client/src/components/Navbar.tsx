@@ -2,11 +2,13 @@
  * Design: Knowledge Cartography — Navbar with language toggle
  */
 import { useState } from "react";
-import { Menu, X, Github, Terminal, Languages } from "lucide-react";
+import { Circle, Cpu, Github, Languages, Menu, Palette, Terminal, X } from "lucide-react";
+import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { useI18n, type Locale } from "@/i18n";
 
 export default function Navbar() {
   const { locale, setLocale, messages } = useI18n();
+  const { theme, setTheme, themes } = useTheme();
   const [mobileOpen, setMobileOpen] = useState(false);
   const navLinks = messages.navbar.links;
   const ui = messages.ui;
@@ -17,6 +19,16 @@ export default function Navbar() {
 
   const otherLocale: Locale = locale === "en-US" ? "zh-CN" : "en-US";
   const otherLabel = otherLocale === "zh-CN" ? ui.switchToZh : ui.switchToEn;
+  const themeLabels: Record<Theme, string> = {
+    default: ui.themeDefault,
+    mono: ui.themeMono,
+    tech: ui.themeTech,
+  };
+  const themeIcons = {
+    default: Palette,
+    mono: Circle,
+    tech: Cpu,
+  } satisfies Record<Theme, typeof Palette>;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-ivory/90 backdrop-blur-md border-b border-border">
@@ -48,6 +60,30 @@ export default function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
+          <div
+            className="inline-flex items-center gap-1 rounded-md border border-border/60 bg-parchment/60 p-1"
+            aria-label={ui.themeToggleAria}
+          >
+            {themes.map((item) => {
+              const Icon = themeIcons[item];
+              return (
+                <button
+                  key={item}
+                  type="button"
+                  onClick={() => setTheme(item)}
+                  className={`inline-flex h-7 min-w-7 items-center justify-center rounded px-2 text-xs font-semibold transition-colors ${
+                    theme === item
+                      ? "bg-terracotta text-ivory"
+                      : "text-foreground/65 hover:text-terracotta"
+                  }`}
+                  aria-label={themeLabels[item]}
+                  title={themeLabels[item]}
+                >
+                  <Icon className="h-3.5 w-3.5" />
+                </button>
+              );
+            })}
+          </div>
           <button
             type="button"
             onClick={toggleLocale}
@@ -109,6 +145,27 @@ export default function Navbar() {
               <Languages className="w-4 h-4" />
               {otherLabel}
             </button>
+            <div className="grid grid-cols-3 gap-2 py-2">
+              {themes.map((item) => {
+                const Icon = themeIcons[item];
+                return (
+                  <button
+                    key={item}
+                    type="button"
+                    onClick={() => setTheme(item)}
+                    className={`flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-xs font-semibold ${
+                      theme === item
+                        ? "border-terracotta bg-terracotta text-ivory"
+                        : "border-border/60 text-foreground/70"
+                    }`}
+                    aria-label={themeLabels[item]}
+                  >
+                    <Icon className="h-3.5 w-3.5" />
+                    {themeLabels[item]}
+                  </button>
+                );
+              })}
+            </div>
             <a
               href="https://github.com/zelixag/ai-memex-cli"
               target="_blank"

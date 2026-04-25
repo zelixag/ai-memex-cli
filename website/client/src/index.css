@@ -42,15 +42,15 @@
   --color-sidebar-ring: var(--sidebar-ring);
 
   /* Knowledge Cartography custom colors */
-  --color-ivory: oklch(0.97 0.01 85);
-  --color-parchment: oklch(0.94 0.02 80);
-  --color-ink: oklch(0.18 0.03 280);
-  --color-terracotta: oklch(0.58 0.16 30);
-  --color-terracotta-light: oklch(0.68 0.12 30);
-  --color-sage: oklch(0.58 0.06 150);
-  --color-sage-light: oklch(0.88 0.04 150);
-  --color-gold: oklch(0.72 0.12 80);
-  --color-gold-light: oklch(0.88 0.08 80);
+  --color-ivory: var(--theme-ivory);
+  --color-parchment: var(--theme-parchment);
+  --color-ink: var(--theme-ink);
+  --color-terracotta: var(--theme-terracotta);
+  --color-terracotta-light: var(--theme-terracotta-light);
+  --color-sage: var(--theme-sage);
+  --color-sage-light: var(--theme-sage-light);
+  --color-gold: var(--theme-gold);
+  --color-gold-light: var(--theme-gold-light);
 
   --font-display: 'Playfair Display', Georgia, 'Times New Roman', serif;
   --font-body: 'Source Sans 3', 'Segoe UI', system-ui, sans-serif;
@@ -59,6 +59,15 @@
 
 :root {
   --radius: 0.5rem;
+  --theme-ivory: oklch(0.97 0.01 85);
+  --theme-parchment: oklch(0.94 0.02 80);
+  --theme-ink: oklch(0.18 0.03 280);
+  --theme-terracotta: oklch(0.58 0.16 30);
+  --theme-terracotta-light: oklch(0.68 0.12 30);
+  --theme-sage: oklch(0.58 0.06 150);
+  --theme-sage-light: oklch(0.88 0.04 150);
+  --theme-gold: oklch(0.72 0.12 80);
+  --theme-gold-light: oklch(0.88 0.08 80);
   --background: oklch(0.97 0.01 85);
   --foreground: oklch(0.18 0.03 280);
   --card: oklch(0.95 0.015 82);
@@ -91,6 +100,64 @@
   --sidebar-accent-foreground: oklch(0.18 0.03 280);
   --sidebar-border: oklch(0.85 0.03 80);
   --sidebar-ring: oklch(0.58 0.16 30);
+}
+
+:root[data-theme="mono"] {
+  --theme-ivory: oklch(0.99 0 0);
+  --theme-parchment: oklch(0.95 0 0);
+  --theme-ink: oklch(0.08 0 0);
+  --theme-terracotta: oklch(0.18 0 0);
+  --theme-terracotta-light: oklch(0.36 0 0);
+  --theme-sage: oklch(0.34 0 0);
+  --theme-sage-light: oklch(0.88 0 0);
+  --theme-gold: oklch(0.52 0 0);
+  --theme-gold-light: oklch(0.91 0 0);
+  --background: oklch(0.99 0 0);
+  --foreground: oklch(0.08 0 0);
+  --card: oklch(0.96 0 0);
+  --card-foreground: oklch(0.08 0 0);
+  --popover: oklch(0.99 0 0);
+  --popover-foreground: oklch(0.08 0 0);
+  --primary: oklch(0.18 0 0);
+  --primary-foreground: oklch(0.99 0 0);
+  --secondary: oklch(0.93 0 0);
+  --secondary-foreground: oklch(0.16 0 0);
+  --muted: oklch(0.92 0 0);
+  --muted-foreground: oklch(0.38 0 0);
+  --accent: oklch(0.20 0 0);
+  --accent-foreground: oklch(0.99 0 0);
+  --border: oklch(0.82 0 0);
+  --input: oklch(0.88 0 0);
+  --ring: oklch(0.18 0 0);
+}
+
+:root[data-theme="tech"] {
+  --theme-ivory: oklch(0.13 0.025 245);
+  --theme-parchment: oklch(0.18 0.035 245);
+  --theme-ink: oklch(0.94 0.035 185);
+  --theme-terracotta: oklch(0.72 0.14 185);
+  --theme-terracotta-light: oklch(0.82 0.11 180);
+  --theme-sage: oklch(0.78 0.12 145);
+  --theme-sage-light: oklch(0.28 0.07 150);
+  --theme-gold: oklch(0.82 0.15 88);
+  --theme-gold-light: oklch(0.32 0.08 88);
+  --background: oklch(0.13 0.025 245);
+  --foreground: oklch(0.91 0.025 190);
+  --card: oklch(0.18 0.035 245);
+  --card-foreground: oklch(0.91 0.025 190);
+  --popover: oklch(0.16 0.035 245);
+  --popover-foreground: oklch(0.91 0.025 190);
+  --primary: oklch(0.72 0.14 185);
+  --primary-foreground: oklch(0.11 0.025 245);
+  --secondary: oklch(0.21 0.04 245);
+  --secondary-foreground: oklch(0.91 0.025 190);
+  --muted: oklch(0.24 0.035 245);
+  --muted-foreground: oklch(0.68 0.035 205);
+  --accent: oklch(0.78 0.12 145);
+  --accent-foreground: oklch(0.11 0.025 245);
+  --border: oklch(0.32 0.045 225);
+  --input: oklch(0.26 0.04 225);
+  --ring: oklch(0.72 0.14 185);
 }
 
 @layer base {

@@ -1,7 +1,7 @@
 {
   "name": "ai-memex-cli",
-  "version": "0.2.0",
-  "description": "CLI for building and maintaining persistent LLM wikis",
+  "version": "0.3.0",
+  "description": "Git-backed Markdown knowledge base maintained by AI agents",
   "type": "module",
   "bin": {
     "memex": "./dist/cli.js"
@@ -14,12 +14,7 @@
     "prepublishOnly": "pnpm build",
     "changelog": "changelogen",
     "changelog:bump": "changelogen --bump --patch",
-    "release": "node scripts/release.mjs",
-    "release:minor": "node scripts/release.mjs --bump minor",
-    "release:major": "node scripts/release.mjs --bump major",
-    "release:dry": "node scripts/release.mjs --dry-run",
-    "release:no-agent": "node scripts/release.mjs --no-agent",
-    "release:changelogen": "changelogen --release --patch --publish",
+    "release": "node .claude/skills/release/scripts/orchestrator.mjs",
     "docs:sync": "cd website && pnpm build:gh-pages"
   },
   "keywords": [

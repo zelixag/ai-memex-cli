@@ -7,8 +7,6 @@ import { useI18n } from "@/i18n";
 
 const HERO_IMG =
   "https://d2xsxph8kpxj0f.cloudfront.net/310519663089592650/8gUpxoXV9ibnL63toqcSZM/hero-map_439eb193.png";
-const KARPATHY_GIST =
-  "https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f";
 
 export default function HeroSection() {
   const { messages } = useI18n();
@@ -57,36 +55,13 @@ export default function HeroSection() {
             transition={{ duration: 0.7, delay: 0.2 }}
             className="text-lg sm:text-xl text-foreground/70 leading-relaxed mb-6 max-w-xl font-[var(--font-body)]"
           >
-            {h.subtitleBefore}
-            <a
-              href={KARPATHY_GIST}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-ink underline decoration-terracotta/40 hover:decoration-terracotta"
-            >
-              {h.subtitleLink}
-            </a>
-            {h.subtitleAfter}
+            {h.subtitle}
           </motion.p>
-
-          <motion.blockquote
-            initial={{ opacity: 0, y: 30 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.25 }}
-            className="border-l-2 border-terracotta/40 pl-4 mb-8 max-w-xl"
-          >
-            <p className="text-sm text-foreground/60 italic font-[var(--font-body)] leading-relaxed">
-              {h.quote}
-            </p>
-            <cite className="text-xs text-foreground/40 not-italic font-[var(--font-body)]">
-              {h.quoteAuthor}
-            </cite>
-          </motion.blockquote>
 
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.3 }}
+            transition={{ duration: 0.7, delay: 0.25 }}
             className="mb-8"
           >
             <div className="inline-flex items-center gap-3 px-5 py-3 bg-ink rounded-lg shadow-lg border border-ink/80">
@@ -111,7 +86,7 @@ export default function HeroSection() {
           <motion.div
             initial={{ opacity: 0, y: 30 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.7, delay: 0.4 }}
+            transition={{ duration: 0.7, delay: 0.35 }}
             className="flex flex-wrap gap-4"
           >
             <a

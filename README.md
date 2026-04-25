@@ -2,7 +2,9 @@
 
 **English** · [简体中文](./README.zh-CN.md)
 
-> An agent-native LLM wiki workflow, powered by a CLI toolbox. Install the memex skill into your AI agent, then let the agent **build and maintain** a persistent Markdown knowledge base that *compounds* instead of being re-derived every session.
+> **Your AI agents, finally with a memory that compounds.**
+>
+> AI Memex turns chats, documents, research, and project decisions into a living Markdown knowledge base, maintained by agents and versioned in Git.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://img.shields.io/npm/v/ai-memex-cli.svg)](https://www.npmjs.com/package/ai-memex-cli)
@@ -15,7 +17,7 @@ Most RAG systems rediscover knowledge from scratch on every question — retriev
 
 This is the oldest idea in information management — Vannevar Bush's 1945 **Memex**. Bush's vision had one gap: *who does the maintenance?* LLMs fill that gap — they don't get bored updating cross-references, and they can touch 15 pages in one pass.
 
-**What ai-memex is:** an agent-first workflow for long-lived knowledge work. The installed `ai-memex` skill decides when to capture, ingest, query, distill, or repair knowledge. The `memex` CLI provides the reliable mechanical primitives underneath: fetch sources, search the wiki, validate links/frontmatter, initialize vaults, install agent commands/skills, and parse sessions.
+**What ai-memex is:** a Git-backed Markdown knowledge base maintained by your AI agents. The installed `ai-memex` skill decides when to capture, ingest, query, distill, or repair knowledge. The `memex` CLI stays underneath as the mechanical toolbox: fetch sources, search the wiki, validate links/frontmatter, initialize vaults, install agent commands/skills, and parse sessions.
 
 **What it isn't:** a RAG system, an MCP memory server, or a black-box vector store. The CLI makes **zero LLM API calls**. Your local agent (Claude Code, Cursor, Codex, Gemini, …) does the semantic work through the skill. The wiki itself is plain Markdown in a git repo — you can read it, edit it, diff it, blame it.
 

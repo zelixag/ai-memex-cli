@@ -2,7 +2,9 @@
 
 [English](./README.md) · **简体中文**
 
-> 一个 agent-native 的 LLM wiki 工作流，由 CLI 工具箱提供底层支撑。把 memex skill 安装进你的 AI agent，然后让 agent **构建并维护**一份持久的 Markdown 知识库，让知识**累积复利**，而不是每次会话都从零重新推导。
+> **你的 AI Agent，终于有了会复利的长期记忆。**
+>
+> AI Memex 会把你的 AI 对话、文档、研究资料和项目决策，沉淀成一个由 Agent 持续维护、由 Git 管理版本的 Markdown 知识库。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://img.shields.io/npm/v/ai-memex-cli.svg)](https://www.npmjs.com/package/ai-memex-cli)
@@ -15,7 +17,7 @@
 
 这其实是信息管理领域最古老的想法 —— Vannevar Bush 在 1945 年提出的 **Memex**。Bush 的愿景有一个未解之题：*谁来做维护？* LLM 刚好填补了这个缺口 —— 它们不会在更新交叉引用时感到厌倦，而且能在一个 pass 里触达 15 个页面。
 
-**ai-memex 是什么：** 一套 agent-first 的长期知识工作流。安装后的 `ai-memex` skill 负责判断什么时候 capture、ingest、query、distill 或 repair 知识；`memex` CLI 则提供底层可靠的机械原语：抓取 source、搜索 wiki、校验 link/frontmatter、初始化 vault、安装 agent commands/skills、解析 session。
+**ai-memex 是什么：** 一个由 AI Agent 持续维护、由 Git 管理版本的 Markdown 知识库。安装后的 `ai-memex` skill 负责判断什么时候 capture、ingest、query、distill 或 repair 知识；`memex` CLI 则退到底层，作为可靠的机械工具箱：抓取 source、搜索 wiki、校验 link/frontmatter、初始化 vault、安装 agent commands/skills、解析 session。
 
 **它不是什么：** 它**不是** RAG 系统、**不是** MCP memory server、**不是**黑盒向量存储。CLI 本身**不调用任何 LLM API**。真正的语义工作由你本地的 agent（Claude Code、Cursor、Codex、Gemini……）通过 skill 完成。wiki 本身就是 git 仓库里的纯 Markdown —— 你可以读、可以改、可以 diff、可以 blame。
 

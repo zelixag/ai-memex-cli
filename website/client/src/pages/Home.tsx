@@ -5,6 +5,7 @@
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/HeroSection";
 import FeaturesSection from "@/components/FeaturesSection";
+import ScenariosSection from "@/components/ScenariosSection";
 import ArchitectureSection from "@/components/ArchitectureSection";
 import CommandsSection from "@/components/CommandsSection";
 import ComparisonSection from "@/components/ComparisonSection";
@@ -18,6 +19,7 @@ export default function Home() {
       <main>
         <HeroSection />
         <FeaturesSection />
+        <ScenariosSection />
         <ArchitectureSection />
         <CommandsSection />
         <ComparisonSection />

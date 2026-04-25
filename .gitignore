@@ -3,3 +3,7 @@ dist/
 *.log
 .DS_Store
 .test-vaults/
+
+# Local agent configs (per-machine, not shared)
+.claude/settings.local.json
+.codex/
