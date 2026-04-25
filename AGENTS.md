@@ -138,3 +138,36 @@ SessionEnd hook   → distill → raw/sessions/session-*.md
 - **路径处理**：Vault 路径在内部统一归一化为正斜杠，Windows 兼容性通过 `normalizePath()` 保证。
 - **配置降级**：当外部 agent 命令（如 `claude -p`）不可用时，必须提供友好的降级提示或纯机械 fallback，不能 panic。
 - **MVP 验收**：新增或修改命令前，应核对 `docs/PRD-ai-memex.md` 第 7 章的验收标准（功能、鲁棒性、测试覆盖）。
+
+<!-- memex:context:start v=1 vault=C:/Users/Administrator/.llmwiki mode=digest updated=2026-04-25 -->
+## 🧠 Memex Knowledge Base
+
+This project is connected to a persistent knowledge base (LLM Wiki) managed by the `memex` CLI.
+
+- **Vault**: `C:/Users/Administrator/.llmwiki`
+- **Pages**: 16 (team: 16)
+- **Updated**: 2026-04-25
+- **Agent**: codex
+
+### Index digest
+
+**team** — 16 pages
+- [[agent-first-memex-workflow]] — agent skill 是主界面，CLI 是工具箱的产品与架构原则
+- [[agent-native-architecture]] — ai-memex-cli 三层架构设计：Agent Interface、Workflow Protocol、CLI Toolbox
+- [[cli-toolbox-boundary]] — CLI 不负责语义写作、不调 LLM API、只做机械原语的架构边界定义
+- [[multi-agent-installation]] — agent profiles、slash prompts、skills、context files、user/project scope
+- [[release-skill-workflow]] — .claude/skills/release/ 的 11 阶段发版管线设计
+- …11 more (run `memex status --scene team`)
+
+### How to use memex from this session
+
+- `memex search "<topic>"` — keyword + full-text search across the wiki
+- `memex inject --task "<current goal>"` — pull the most relevant pages for your task
+- `memex fetch <url|query>` — fetch web docs / search results into `raw/`
+- `memex distill` / `memex ingest` — convert sessions/raw into structured wiki
+- `memex watch` — auto ingest → lint → ingest loop when `raw/` changes
+- `memex --help` — full command list
+
+> 💡 **Before answering domain questions or starting non-trivial work, consult `memex inject --task "<what you are trying to do>"` to load relevant wiki pages.**
+
+<!-- memex:context:end -->

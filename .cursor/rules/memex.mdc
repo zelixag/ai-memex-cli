@@ -9,29 +9,27 @@ alwaysApply: true
 This project is connected to a persistent knowledge base (LLM Wiki) managed by the `memex` CLI.
 
 - **Vault**: `C:/Users/Administrator/.llmwiki`
-- **Pages**: 3 (team: 3)
+- **Pages**: 16 (team: 16)
 - **Updated**: 2026-04-25
 - **Agent**: cursor
 
-### When to consult the knowledge base
-
-**architecture**
-Path: `C:/Users/Administrator/.llmwiki/wiki/architecture/`
-
-**product**
-Path: `C:/Users/Administrator/.llmwiki/wiki/product/`
-
-> Read the relevant file from the path above. No extra CLI commands needed.
-
 ### Index digest
 
-**team** — 3 pages
-- [[ai-memex-cli-development-session]] — ai-memex-cli 项目 AGENTS.md 制定与 vault 路径解析问题记录
-- [[codex-rollouts-2026-04]] — 2026 年 4 月 Codex Desktop rollout JSONL 会话记录索引
-- [[memex-operations-session-2026-04-24]] — memex ingest/capture/distill 操作记录与网络问题排查
+**team** — 16 pages
+- [[agent-first-memex-workflow]] — agent skill 是主界面，CLI 是工具箱的产品与架构原则
+- [[agent-native-architecture]] — ai-memex-cli 三层架构设计：Agent Interface、Workflow Protocol、CLI Toolbox
+- [[cli-toolbox-boundary]] — CLI 不负责语义写作、不调 LLM API、只做机械原语的架构边界定义
+- [[multi-agent-installation]] — agent profiles、slash prompts、skills、context files、user/project scope
+- [[release-skill-workflow]] — .claude/skills/release/ 的 11 阶段发版管线设计
+- …11 more (run `memex status --scene team`)
 
-### memex CLI
+### How to use memex from this session
 
-- `memex search "<topic>"` — keyword search across the wiki
-- `memex context refresh` — sync latest wiki updates to this block
+- `memex search "<topic>"` — keyword + full-text search across the wiki
+- `memex inject --task "<current goal>"` — pull the most relevant pages for your task
+- `memex fetch <url|query>` — fetch web docs / search results into `raw/`
+- `memex distill` / `memex ingest` — convert sessions/raw into structured wiki
+- `memex watch` — auto ingest → lint → ingest loop when `raw/` changes
 - `memex --help` — full command list
+
+> 💡 **Before answering domain questions or starting non-trivial work, consult `memex inject --task "<what you are trying to do>"` to load relevant wiki pages.**
