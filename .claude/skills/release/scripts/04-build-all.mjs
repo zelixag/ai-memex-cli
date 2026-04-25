@@ -1,19 +1,26 @@
 #!/usr/bin/env node
 // Phase 4: Build CLI (always) + conditionally rebuild website → docs/.
 //
-// The website source lives at website/, and `cd website && pnpm build:gh-pages`
-// emits the GitHub Pages bundle into docs/. We only rebuild docs/ if the agent
-// touched website source in phase 2 (or the user forces it).
+// CLI build: invoked by `node node_modules/typescript/bin/tsc` directly,
+// bypassing corepack/pnpm. Why? On Windows + Node 22 the chain
+//   orchestrator → 04-build → corepack/pnpm.js → real pnpm → tsc
+// piles up enough nested spawn layers to crash libuv's `process_title`
+// assertion (STATUS_STACK_BUFFER_OVERRUN). Direct-invoke fixes it.
+//
+// Website rebuild still goes via pnpm (vite build && esbuild ... is a chained
+// script). If that hits the same assertion, re-run with --rebuild-website skip
+// and rebuild docs/ manually with `cd website && pnpm build:gh-pages` from a
+// fresh shell.
 //
 // Flags:
 //   --rebuild-website auto|force|skip   Default: auto (rebuild iff source changed)
-//   --dry-run                           Skip pnpm install + build
+//   --dry-run                           Skip the actual build
 
 import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { step, info, ok, warn, die, emitSummary } from "./_shared/log.mjs";
-import { shOut, shPnpm } from "./_shared/shell.mjs";
+import { sh, shOut, shPnpm } from "./_shared/shell.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(__dirname, "../../../..");
@@ -41,11 +48,19 @@ process.chdir(repoRoot);
 
 step("4/11", "Build");
 
-// CLI build
+// CLI build — direct tsc invocation to dodge Windows multi-layer spawn assertion.
 if (args.dryRun) {
-  info("[dry-run] would run: pnpm build");
+  info("[dry-run] would run: node node_modules/typescript/bin/tsc");
 } else {
-  shPnpm(["build"], { cwd: repoRoot });
+  const tscEntry = join(repoRoot, "node_modules", "typescript", "bin", "tsc");
+  if (existsSync(tscEntry)) {
+    info(`node typescript/bin/tsc (direct invocation, no pnpm/corepack)`);
+    sh(process.execPath, [tscEntry], { cwd: repoRoot, shell: false });
+  } else {
+    warn("node_modules/typescript/bin/tsc not found — falling back to pnpm build");
+    warn("(may crash on Windows + Node 22 with libuv process_title assertion)");
+    shPnpm(["build"], { cwd: repoRoot });
+  }
   ok("CLI built (dist/)");
 }
 

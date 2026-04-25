@@ -25,13 +25,17 @@ export function resetConsole() {
  *  - inherit stdout/stderr for visibility
  *  - ignore stdin (children should never read from a half-polluted TTY)
  *  - die on non-zero exit unless { allowFail: true }
+ *
+ * Note: shell defaults to false. Windows + shell:true mangles args with spaces
+ * (`git commit -m "release: v0.3.0"` was getting split). The few callers that
+ * need .cmd shim resolution (pnpm fallback) opt in explicitly.
  */
 export function sh(cmd, args, opts = {}) {
   resetConsole();
   const defaultStdio = opts.silent ? "pipe" : ["ignore", "inherit", "inherit"];
   const r = spawnSync(cmd, args, {
     stdio: defaultStdio,
-    shell: process.platform === "win32",
+    shell: false,
     encoding: "utf8",
     windowsHide: true,
     ...opts,
@@ -111,14 +115,18 @@ export function resolvePnpmEntry() {
 /**
  * Run `pnpm <args>` but, on Windows, skip the cmd shim by invoking
  * `node <pnpm.cjs> <args>` directly. Falls back to `sh("pnpm", ...)` when
- * the entry can't be resolved.
+ * the entry can't be resolved (where it must opt into shell:true on Windows
+ * because `pnpm` is a .cmd shim that the bare exec loader can't find).
  */
 export function shPnpm(args, opts = {}) {
   const entry = resolvePnpmEntry();
   if (entry) {
     return sh(process.execPath, [entry, ...args], { ...opts, shell: false });
   }
-  return sh("pnpm", args, opts);
+  return sh("pnpm", args, {
+    ...opts,
+    shell: opts.shell ?? process.platform === "win32",
+  });
 }
 
 /** Async spawn with stdio: inherit. Resolves to exit code. */

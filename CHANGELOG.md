@@ -4,6 +4,40 @@
 
 **首次增量发版前（只需一次）**：在当前基线提交上打标签，之后新版本只会统计该标签之后的提交：`git tag v0.1.0` 并 `git push origin v0.1.0`（若尚未打过 `v0.1.0`）。
 
+## v0.3.0
+
+### 🚀 Enhancements
+
+- **Agent-native architecture (Phase 3-5)**：CLI 完全转向"机械层"定位，所有语义工作交给外部 agent，新增 `memex onboard` / `memex context` 命令族用于 L0 上下文注入。([6ad427c](https://github.com/zelixag/ai-memex-cli/commit/6ad427c))
+- **Vault 结构重构**：`global vault` 概念改为 `default wiki vault`（`~/.llmwiki/`），`init` 命令支持 `--agent` 标志指定 wiki schema 文件名，context 命令支持绑定 wiki 场景。([ee1d2fa](https://github.com/zelixag/ai-memex-cli/commit/ee1d2fa))
+- **国际化与文档站升级**：website 新增 ScenariosSection / ScenarioArticle，HeroSection / Navbar / ThemeContext 重新设计，i18n 文案大幅扩充（en-US.ts +424 行 / zh-CN.ts +428 行），新增暗色主题与场景介绍页。([be5790c](https://github.com/zelixag/ai-memex-cli/commit/be5790c), [ee1d2fa](https://github.com/zelixag/ai-memex-cli/commit/ee1d2fa))
+
+### 📦 Release tooling & Docs
+
+- **新增 release skill（`.claude/skills/release/`）**：替代旧的 `scripts/release.mjs`，把发版流程拆成 11 个独立可调用的阶段脚本（preflight / sync-docs / bump / build / test / pack-preview / git-finalize / publish / git-push / github-release / verify），由 `orchestrator.mjs` 串联，`pnpm release` 入口指向新 orchestrator。每阶段输出 `::summary:: <json>` 供 agent 解析。([ee1d2fa](https://github.com/zelixag/ai-memex-cli/commit/ee1d2fa))
+- **新增 beta 通道支持**：`pnpm release --beta` 走 `--tag beta` 发 npm，打 `vX.Y.Z-beta.N` git tag，自动跳过 GitHub Release，避免 prerelease 污染 release feed。
+- **新增 GitHub Release 自动化**：phase 10 自动从 CHANGELOG.md 切片 `## vX.Y.Z` 段，喂给 `gh release create --notes-file`。
+- **新增 `pnpm pack --dry-run` 内容审计**：phase 6 校验 tarball 必含 `dist/` `templates/` `README*.md` `CHANGELOG.md` `LICENSE`，且不带 `.claude/` `.codex/` `website/` `tests/` `scripts/` 等私有目录。
+- **新增发布后验证**：phase 11 校验 `pnpm view <pkg>@<version> version` 与 `gh release view` 都符合预期。
+- 删除旧 `scripts/release.mjs`（功能已迁入 skill）。([ee1d2fa](https://github.com/zelixag/ai-memex-cli/commit/ee1d2fa))
+- 文档同步脚本 (`docs:sync`) 与构建脚本完善。([2ed27b2](https://github.com/zelixag/ai-memex-cli/commit/2ed27b2), [70977c9](https://github.com/zelixag/ai-memex-cli/commit/70977c9))
+
+### 🩹 Fixes
+
+- **Phase 4 / 5 Windows libuv `process_title` assertion (STATUS_STACK_BUFFER_OVERRUN)**：CLI build 改为直接 `node node_modules/typescript/bin/tsc`、tests 改为 `node vitest.mjs run --pool=threads`，砍掉 corepack/pnpm 多层 spawn，规避 Windows + Node 22 的多层 child_process 触发的 libuv 崩溃。同时让 v0.1.5 已知的 4 个 Windows-only `search.test.ts` 失败一并复活。
+- 中英文 README 重新对齐 vault 结构变更后的术语，删除过时段落。([ee1d2fa](https://github.com/zelixag/ai-memex-cli/commit/ee1d2fa))
+- index.html 修正英文本地化，清理过时 docs 资源。([5bdcf88](https://github.com/zelixag/ai-memex-cli/commit/5bdcf88))
+
+### 💅 Refactors
+
+- AGENTS.md 精简，去除 23 行过时的 schema 说明。([ee1d2fa](https://github.com/zelixag/ai-memex-cli/commit/ee1d2fa))
+- CLAUDE.md 项目说明更新，反映 vault 结构与命令变化。([ee1d2fa](https://github.com/zelixag/ai-memex-cli/commit/ee1d2fa))
+- 清理过时 website 文件与配置。([7cf4245](https://github.com/zelixag/ai-memex-cli/commit/7cf4245))
+
+### 🔧 Internal
+
+- `.gitignore` 新增 `.claude/settings.local.json` 与 `.codex/`，让 `.claude/skills/` 进 git 但放过本地配置。
+
 ## v0.1.5
 
 ### 🚀 Enhancements
