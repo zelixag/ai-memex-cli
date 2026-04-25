@@ -22,12 +22,12 @@ describe('initCommand', () => {
     tempDirs.length = 0;
   });
 
-  it('should create global vault structure', async () => {
+  it('should create global vault structure with CLAUDE.md for claude-code', async () => {
     const dir = makeTempDir();
-    await initCommand({ scope: 'global' }, dir);
+    await initCommand({ scope: 'global', agent: 'claude-code' }, dir);
 
-    const vaultRoot = join(dir, '.llmwiki', 'global');
-    expect(existsSync(join(vaultRoot, 'AGENTS.md'))).toBe(true);
+    const vaultRoot = join(dir, '.llmwiki');
+    expect(existsSync(join(vaultRoot, 'CLAUDE.md'))).toBe(true);
     expect(existsSync(join(vaultRoot, 'index.md'))).toBe(true);
     expect(existsSync(join(vaultRoot, 'log.md'))).toBe(true);
     expect(existsSync(join(vaultRoot, 'raw'))).toBe(true);
@@ -44,8 +44,15 @@ describe('initCommand', () => {
 
   it('should not crash when vault already exists', async () => {
     const dir = makeTempDir();
-    await initCommand({ scope: 'global' }, dir);
+    await initCommand({ scope: 'global', agent: 'claude-code' }, dir);
     // Second init should not throw
-    await expect(initCommand({ scope: 'global' }, dir)).resolves.not.toThrow();
+    await expect(initCommand({ scope: 'global', agent: 'claude-code' }, dir)).resolves.not.toThrow();
+  });
+
+  it('should create AGENTS.md for codex global vault', async () => {
+    const dir = makeTempDir();
+    await initCommand({ scope: 'global', agent: 'codex' }, dir);
+    const vaultRoot = join(dir, '.llmwiki');
+    expect(existsSync(join(vaultRoot, 'AGENTS.md'))).toBe(true);
   });
 });

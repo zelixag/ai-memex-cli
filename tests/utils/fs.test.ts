@@ -11,7 +11,7 @@ describe('normalizePath', () => {
 
   it('should expand ~ to home directory', () => {
     const result = normalizePath('~/documents/file.md');
-    expect(result).toBe(join(homedir(), 'documents/file.md'));
+    expect(result).toBe(join(homedir(), 'documents/file.md').replace(/\\/g, '/'));
   });
 
   it('should handle empty string gracefully', () => {
@@ -37,7 +37,12 @@ describe('normalizePath', () => {
 
   it('should resolve relative path against cwd', () => {
     const result = normalizePath('./subdir/file.md', '/base/dir');
-    expect(result).toBe('/base/dir/subdir/file.md');
+    // On Windows, /base/dir resolves to C:/base/dir; on Unix it stays /base/dir
+    if (process.platform === 'win32') {
+      expect(result).toMatch(/^C:\/base\/dir\/subdir\/file\.md$/);
+    } else {
+      expect(result).toBe('/base/dir/subdir/file.md');
+    }
   });
 
   it('should handle just tilde', () => {
@@ -47,7 +52,12 @@ describe('normalizePath', () => {
 
   it('should handle dot path', () => {
     const result = normalizePath('.', '/some/dir');
-    expect(result).toBe('/some/dir');
+    // On Windows, /some/dir resolves to C:/some/dir; on Unix it stays /some/dir
+    if (process.platform === 'win32') {
+      expect(result).toMatch(/^.:\/some\/dir$/);
+    } else {
+      expect(result).toBe('/some/dir');
+    }
   });
 });
 

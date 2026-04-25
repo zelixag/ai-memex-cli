@@ -1,7 +1,30 @@
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
+import { resolve as pathResolve } from 'node:path';
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Decode stderr bytes from a Windows child (often cmd.exe or OEM/GBK tools).
+ * Prefer UTF-8; if replacement chars appear, try GB18030 which matches common
+ * Chinese-locale Windows console output.
+ */
+export function decodeChildStderr(buf: Buffer): string {
+  if (buf.length === 0) return '';
+  const asUtf8 = buf.toString('utf8');
+  const bad = (asUtf8.match(/\uFFFD/g) ?? []).length;
+  if (bad === 0) return asUtf8;
+  if (process.platform === 'win32') {
+    try {
+      const gb = new TextDecoder('gb18030').decode(buf);
+      const badGb = (gb.match(/\uFFFD/g) ?? []).length;
+      if (badGb < bad) return gb;
+    } catch {
+      /* ignore */
+    }
+  }
+  return asUtf8;
+}
 
 export async function runCommand(
   command: string,
@@ -22,10 +45,12 @@ export async function runCommand(
  * in `memex watch`'s log (or the user's terminal) as it happens, instead
  * of arriving in one big lump at the very end.
  *
- * - `onStdout(chunk)` / `onStderr(chunk)` can be passed to intercept
- *   streaming chunks (e.g. to prefix each line with `[ingest] ` in the log).
- *   When not provided, raw chunks are written to `process.stdout` /
- *   `process.stderr`.
+ * - `onStdout(chunk)` can be passed to intercept streaming stdout chunks
+ *   (e.g. to prefix each line with `[ingest] ` in the log). When not provided,
+ *   raw chunks are written to `process.stdout`.
+ * - Stderr is buffered until the child exits, then decoded (UTF-8 with a
+ *   GB18030 fallback on Windows) and delivered in one piece: either to
+ *   `onStderr(full)` if provided, or to `process.stderr`.
  * - Resolves with the captured stdout/stderr when the child exits 0.
  *   Rejects with an Error containing `.code` when the child exits non-zero
  *   or fails to start.
@@ -34,7 +59,8 @@ export interface RunCommandStreamedOptions {
   cwd?: string;
   env?: NodeJS.ProcessEnv;
   onStdout?: (chunk: string) => void;
-  onStderr?: (chunk: string) => void;
+  /** Called once after exit with the full decoded stderr string (may be empty). */
+  onStderr?: (full: string) => void;
 }
 
 export function runCommandStreamed(
@@ -55,7 +81,7 @@ export function runCommandStreamed(
     const needsShell = isWin && /\.(cmd|bat|ps1)$/i.test(command);
 
     const child = spawn(command, args, {
-      cwd: options?.cwd,
+      cwd: options?.cwd ? pathResolve(options.cwd) : undefined,
       env: { ...process.env, ...options?.env },
       stdio: ['ignore', 'pipe', 'pipe'],
       shell: needsShell,
@@ -63,20 +89,18 @@ export function runCommandStreamed(
     });
 
     const outBuf: string[] = [];
-    const errBuf: string[] = [];
+    const errChunks: Buffer[] = [];
 
     child.stdout?.setEncoding('utf-8');
-    child.stderr?.setEncoding('utf-8');
 
     child.stdout?.on('data', (chunk: string) => {
       outBuf.push(chunk);
       if (options?.onStdout) options.onStdout(chunk);
       else process.stdout.write(chunk);
     });
-    child.stderr?.on('data', (chunk: string) => {
-      errBuf.push(chunk);
-      if (options?.onStderr) options.onStderr(chunk);
-      else process.stderr.write(chunk);
+    child.stderr?.on('data', (chunk: Buffer | string) => {
+      const buf = typeof chunk === 'string' ? Buffer.from(chunk, 'utf8') : chunk;
+      errChunks.push(buf);
     });
 
     child.on('error', (err) => {
@@ -84,7 +108,11 @@ export function runCommandStreamed(
     });
     child.on('close', (code) => {
       const stdout = outBuf.join('');
-      const stderr = errBuf.join('');
+      const stderr = decodeChildStderr(Buffer.concat(errChunks));
+      if (stderr) {
+        if (options?.onStderr) options.onStderr(stderr);
+        else process.stderr.write(stderr);
+      }
       if (code === 0) {
         resolve({ stdout, stderr, code: 0 });
       } else {
@@ -100,10 +128,23 @@ export function runCommandStreamed(
 }
 
 export async function commandExists(command: string): Promise<boolean> {
+  return (await resolveCommandPath(command)) !== null;
+}
+
+export async function resolveCommandPath(command: string): Promise<string | null> {
   try {
-    await execFileAsync('which', [command]);
-    return true;
+    const which = process.platform === 'win32' ? 'where' : 'which';
+    const { stdout } = await execFileAsync(which, [command]);
+    const raw = stdout.trim().split(/\r?\n/)[0]?.trim() ?? '';
+    if (!raw) return null;
+    // On Windows, npm global shims are .cmd files. `where` may return the bare
+    // name. Detect by checking whether the file actually exists with .cmd appended.
+    if (process.platform === 'win32') {
+      const { existsSync } = await import('node:fs');
+      if (existsSync(raw + '.cmd')) return raw + '.cmd';
+    }
+    return raw;
   } catch {
-    return false;
+    return null;
   }
 }

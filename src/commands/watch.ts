@@ -35,6 +35,7 @@ import {
   stat,
   appendFile,
   open,
+  readdir,
 } from 'node:fs/promises';
 import { spawn } from 'node:child_process';
 import { dirname, join, resolve as pathResolve, relative as pathRelative } from 'node:path';
@@ -98,7 +99,20 @@ interface RunState {
   healOnStart: boolean;
 }
 
-const DEFAULT_EXT = ['md', 'jsonl', 'json', 'txt'] as const;
+const DEFAULT_EXT = [
+  // docs
+  'md', 'mdx', 'txt', 'rst',
+  // web frontend
+  'ts', 'tsx', 'js', 'jsx', 'vue', 'svelte', 'css', 'scss', 'less', 'html',
+  // backend
+  'py', 'go', 'rs', 'java', 'kt', 'cs', 'rb', 'php', 'swift',
+  // config & data
+  'json', 'jsonl', 'yaml', 'yml', 'toml', 'xml', 'env', 'ini', 'cfg',
+  // shell
+  'sh', 'bash', 'ps1', 'bat', 'cmd', 'zsh',
+  // other
+  'sql', 'graphql', 'proto', 'dockerfile', 'gitignore',
+] as const;
 
 export async function watchCommand(options: WatchOptions, cwd: string): Promise<void> {
   const vault = await resolveGlobalVaultPath({ explicitPath: options.vault }, cwd);
@@ -127,7 +141,9 @@ export async function watchCommand(options: WatchOptions, cwd: string): Promise<
   }
 
   if (options.daemon) {
-    await spawnDaemon({ ...options, vault, path: watchPath }, pidPath, logPath);
+    // heal defaults to true in daemon mode — process existing files + auto-heal wiki
+    const daemonOptions = { ...options, heal: options.heal ?? true };
+    await spawnDaemon({ ...daemonOptions, vault, path: watchPath }, pidPath, logPath);
     return;
   }
 
@@ -347,10 +363,19 @@ export async function watchCommand(options: WatchOptions, cwd: string): Promise<
     logger.error(`watcher error: ${error instanceof Error ? error.message : String(error)}`);
   });
 
+  // Initial pass: queue existing files so they get processed on startup
+  if (!options.once) {
+    const existingFiles = await scanDir(watchPath, state.extensions);
+    if (existingFiles.length > 0) {
+      logger.info(`startup: ${existingFiles.length} existing file(s) found — queuing initial pass`);
+      for (const f of existingFiles) pendingFiles.add(f);
+      setTimeout(() => void triggerFiles(), 200);
+    }
+  }
+
   // Health-driven auto-heal loop — runs alongside file events.
   if (state.heal) {
     if (state.healOnStart) {
-      // Give chokidar a tick to warm up; no hard requirement.
       setTimeout(() => void triggerHeal(true), 500);
     }
     setInterval(() => void triggerHeal(false), state.healIntervalMs).unref();
@@ -360,6 +385,24 @@ export async function watchCommand(options: WatchOptions, cwd: string): Promise<
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+async function scanDir(dir: string, exts: Set<string>): Promise<string[]> {
+  const results: string[] = [];
+  try {
+    const entries = await readdir(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const full = join(dir, entry.name).replace(/\\/g, '/');
+      if (entry.isDirectory()) {
+        results.push(...await scanDir(full, exts));
+      } else if (entry.isFile() && shouldReact(full, exts)) {
+        results.push(full);
+      }
+    }
+  } catch {
+    /* unreadable dir — skip */
+  }
+  return results;
+}
 
 function parseExtensions(raw?: string): Set<string> {
   const list = raw

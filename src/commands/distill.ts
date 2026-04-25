@@ -21,17 +21,23 @@
  *   memex distill --no-llm session.jsonl  → mechanical extraction only
  */
 
-import { resolveGlobalVaultPath } from '../core/vault.js';
+import { resolveGlobalVaultPath, resolveVaultSchemaPathForRead } from '../core/vault.js';
 import { readFileUtf8, writeFileUtf8, pathExists, normalizePath } from '../utils/fs.js';
 import { logger } from '../utils/logger.js';
-import { createProgressBar, createSpinner } from '../utils/progress.js';
+import { createSpinner } from '../utils/progress.js';
 import {
   parseSessionStructured,
   renderSessionMarkdown,
 } from '../core/distiller.js';
 import { runCommand } from '../utils/exec.js';
 import { readConfig } from '../core/config.js';
-import { resolveAgent, buildAgentArgs, printAgentTable, AGENT_PROFILES, type AgentId } from '../core/agent-adapter.js';
+import {
+  resolveAgent,
+  prepareAgentPromptArgs,
+  printAgentTable,
+  AGENT_PROFILES,
+  type AgentId,
+} from '../core/agent-adapter.js';
 import { readGlobalConfig } from '../core/config.js';
 import { basename, extname, join } from 'node:path';
 import { homedir } from 'node:os';
@@ -81,8 +87,8 @@ export async function distillCommand(options: DistillOptions, cwd: string): Prom
   }
 
   // ── No-arg capture mode ───────────────────────────────────────────────────
-  // `memex distill` 无参数时：直接从 onboard 选定智能体的会话目录**就地读取**
-  // 全部会话（JSONL/JSON），解析成结构化 Markdown 写到
+  // `memex distill` 无参数时：直接从 onboard 选定智能体的会话目录读取
+  // 最近一次会话文件的完整历史，解析成结构化 Markdown 写到
   // `<vault>/raw/<scene>/sessions/`（默认 scene=team，因为会话是团队可共享产出）。
   // 不再把原始 JSONL 拷贝到 vault。
   // 要走「让 agent 去找并写 markdown」的旧行为，请显式加 `--latest` 或传 input。
@@ -90,10 +96,11 @@ export async function distillCommand(options: DistillOptions, cwd: string): Prom
     const globalCfg = await readGlobalConfig();
     const agentIdResolved =
       (options.agent as AgentId | undefined) ??
+      inferCurrentAgentId() ??
       (config.distill.agent as AgentId | undefined) ??
       (globalCfg.agent as AgentId | undefined);
-    const configSessionDir = (globalCfg as Record<string, unknown>).sessionDir as string | undefined;
-    await convertAllSessionsToMarkdown({
+    const configSessionDir = getConfiguredSessionDir(agentIdResolved, globalCfg);
+    await convertLatestSessionToMarkdown({
       vault,
       agentId: agentIdResolved,
       configSessionDir,
@@ -121,7 +128,7 @@ export async function distillCommand(options: DistillOptions, cwd: string): Prom
   // ── Resolve agent from global config if not explicitly set ────────────────
   const globalCfg = await readGlobalConfig();
   const agentIdResolved = agentResult?.id ?? (globalCfg.agent as AgentId) ?? (agentIdHint as AgentId) ?? undefined;
-  const configSessionDir = (globalCfg as Record<string, unknown>).sessionDir as string | undefined;
+  const configSessionDir = getConfiguredSessionDir(agentIdResolved, globalCfg);
 
   // ── Build target hint ─────────────────────────────────────────────────────
   const inputHint = await buildInputHint(options.input, vault, cwd, {
@@ -131,8 +138,12 @@ export async function distillCommand(options: DistillOptions, cwd: string): Prom
   });
 
   // ── Read vault context ────────────────────────────────────────────────────
-  const agentsPath = join(vault, 'AGENTS.md').replace(/\\/g, '/');
-  const agentsContent = (await pathExists(agentsPath)) ? await readFileUtf8(agentsPath) : '';
+  const schemaPath = await resolveVaultSchemaPathForRead(
+    vault,
+    String(config.agent ?? agentResult?.id ?? 'claude-code'),
+  );
+  const agentsContent = schemaPath ? await readFileUtf8(schemaPath) : '';
+  const vaultDigestFile = schemaPath ? basename(schemaPath) : profile.contextFile;
   const indexPath = join(vault, 'index.md').replace(/\\/g, '/');
   const indexContent = (await pathExists(indexPath)) ? await readFileUtf8(indexPath) : '';
 
@@ -150,7 +161,7 @@ export async function distillCommand(options: DistillOptions, cwd: string): Prom
     role: options.role,
     agentsContent,
     indexContent,
-    contextFile: profile.contextFile,
+    contextFile: vaultDigestFile,
     date,
   });
 
@@ -168,21 +179,23 @@ export async function distillCommand(options: DistillOptions, cwd: string): Prom
   logger.info(`Input: ${inputHint}`);
   logger.info(`Output: ${outPath}`);
 
-  const args = buildAgentArgs(profile, resolvedBin, prompt);
+  const prepared = prepareAgentPromptArgs(profile, resolvedBin, prompt, { taskSlug: 'distill' });
   const spinner = createSpinner(`正在调用 ${profile.name} 提炼会话…`);
 
   try {
-    const { stdout, stderr } = await runCommand(resolvedBin, args, { cwd: vault });
+    const { stdout, stderr } = await runCommand(resolvedBin, prepared.args, { cwd: vault });
     spinner.stop(`Distilled to ${outPath}`, 'ok');
     if (stdout) process.stdout.write(stdout);
     if (stderr) process.stderr.write(stderr);
     logger.info(`Next: run \`memex ingest ${outPath}\` to process into wiki pages.`);
   } catch (e) {
     spinner.stop(`Distill failed: ${e instanceof Error ? e.message : String(e)}`, 'err');
+  } finally {
+    prepared.cleanup();
   }
 }
 
-// ── Session → Markdown (no-arg default) ─────────────────────────────────────
+// ── Latest Session → Markdown (no-arg default) ──────────────────────────────
 
 interface ConvertAllOptions {
   vault: string;
@@ -193,12 +206,28 @@ interface ConvertAllOptions {
   dryRun?: boolean;
 }
 
+function getConfiguredSessionDir(
+  agentId: AgentId | undefined,
+  config: { sessionDir?: string; sessionDirs?: Partial<Record<AgentId, string>> }
+): string | undefined {
+  if (agentId) {
+    const agentSessionDir = config.sessionDirs?.[agentId];
+    if (agentSessionDir) return agentSessionDir;
+  }
+  return config.sessionDir;
+}
+
+function inferCurrentAgentId(env: NodeJS.ProcessEnv = process.env): AgentId | undefined {
+  if (env.CODEX_THREAD_ID || env.CODEX_HOME || env.CODEX_MANAGED_BY_NPM) return 'codex';
+  return undefined;
+}
+
 /**
- * 直接从 onboard 选定智能体的会话目录读取全部 JSONL/JSON，解析成结构化
+ * 直接从当前 agent 对应的会话目录读取最新 JSONL/JSON，解析成结构化
  * Markdown 写到 `<vault>/raw/<scene>/sessions/`（默认 scene=team）。
  * **不拷贝原始 JSONL**。幂等：若目标 `.md` 的 mtime ≥ 源文件 mtime，则跳过。
  */
-async function convertAllSessionsToMarkdown(opts: ConvertAllOptions): Promise<void> {
+async function convertLatestSessionToMarkdown(opts: ConvertAllOptions): Promise<void> {
   const base = await resolveAgentSessionBase(opts.agentId, opts.configSessionDir);
   if (!base) {
     logger.error('未能定位到会话目录：当前未选择智能体，或该智能体没有已知的会话目录。');
@@ -221,60 +250,54 @@ async function convertAllSessionsToMarkdown(opts: ConvertAllOptions): Promise<vo
   }
 
   const destDir = sessionsDir(opts.vault, opts.scene);
+  const current = selectCurrentSessionFile(files, opts.agentId);
+  if (!current) return;
+  const mdName = deriveDestName(base, current.path).replace(/\.[^.]+$/, '.md');
+  const dest = join(destDir, mdName).replace(/\\/g, '/');
 
   if (opts.dryRun) {
-    logger.info(`[dry-run] 将从 ${base} 读取 ${files.length} 个会话 → ${destDir}（仅写 .md）`);
-    for (const f of files.slice(0, 20)) {
-      const mdName = deriveDestName(base, f.path).replace(/\.[^.]+$/, '.md');
-      const dest = join(destDir, mdName).replace(/\\/g, '/');
-      logger.info(`  ${f.path}  →  ${dest}`);
-    }
-    if (files.length > 20) logger.info(`  … 其余 ${files.length - 20} 个已省略`);
+    logger.info(`[dry-run] 将从 ${base} 读取当前/最新会话 → ${destDir}（仅写 .md）`);
+    logger.info(`  ${current.path}  →  ${dest}`);
     return;
   }
 
   await mkdir(destDir, { recursive: true });
-  let converted = 0;
-  let skipped = 0;
-  let failed = 0;
-  const bar = createProgressBar(files.length, '转换会话');
-  for (const f of files) {
-    const mdName = deriveDestName(base, f.path).replace(/\.[^.]+$/, '.md');
-    const dest = join(destDir, mdName).replace(/\\/g, '/');
-    try {
-      const existing = await statSafe(dest);
-      if (existing && existing.mtimeMs >= f.mtimeMs) {
-        skipped++;
-        bar.tick(basename(f.path) + ' (skip)');
-        continue;
-      }
-      const raw = await readFileUtf8(f.path);
-      const messages = parseSessionStructured(raw);
-      const output =
-        messages.length > 0
-          ? renderSessionMarkdown(messages, { sourcePath: f.path })
-          : renderSessionMarkdown(
-              [{ role: 'user', text: raw }],
-              { sourcePath: f.path }
-            );
-      await writeFileUtf8(dest, output);
-      converted++;
-      bar.tick(basename(f.path));
-    } catch (e) {
-      failed++;
-      bar.tick(basename(f.path) + ' (fail)');
-      logger.warn(`转换失败：${f.path} (${e instanceof Error ? e.message : String(e)})`);
+  try {
+    const existing = await statSafe(dest);
+    if (existing && existing.mtimeMs >= current.mtimeMs) {
+      logger.info(`最新会话已是最新：${dest}`);
+      return;
     }
+    const raw = await readFileUtf8(current.path);
+    const messages = parseSessionStructured(raw);
+    const output =
+      messages.length > 0
+        ? renderSessionMarkdown(messages, { sourcePath: current.path })
+        : renderSessionMarkdown(
+            [{ role: 'user', text: raw }],
+            { sourcePath: current.path }
+          );
+    await writeFileUtf8(dest, output);
+  } catch (e) {
+    logger.error(`转换失败：${current.path} (${e instanceof Error ? e.message : String(e)})`);
+    return;
   }
-  bar.done(
-    `会话转换完成：新增/更新 ${converted}，跳过 ${skipped}${failed ? `，失败 ${failed}` : ''}`
-  );
-  logger.info(`  来源：${base}`);
-  logger.info(`  目标：${destDir}`);
+  logger.success(`已蒸馏当前会话：${dest}`);
+  logger.info(`  来源：${current.path}`);
+  logger.info(`  目标：${dest}`);
   logger.info(`下一步：memex ingest                 # 让 agent 读取这些 .md 并更新 wiki`);
 }
 
-/** 解析 agent 会话根目录：优先 global config.sessionDir，其次 profile.sessionDir。 */
+function selectCurrentSessionFile(files: FoundFile[], agentId: AgentId | undefined): FoundFile | undefined {
+  if (agentId === 'codex' && process.env.CODEX_THREAD_ID) {
+    const threadId = process.env.CODEX_THREAD_ID.toLowerCase();
+    const current = files.find((file) => file.path.toLowerCase().includes(threadId));
+    if (current) return current;
+  }
+  return [...files].sort((a, b) => b.mtimeMs - a.mtimeMs)[0];
+}
+
+/** 解析 agent 会话根目录：优先 config.sessionDirs[agent]，兼容旧 config.sessionDir，其次 profile.sessionDir。 */
 async function resolveAgentSessionBase(
   agentId: AgentId | undefined,
   configSessionDir: string | undefined
@@ -520,7 +543,7 @@ ${roleSection}
 
 ## Wiki Context
 
-${agentsContent ? `### AGENTS.md\n${agentsContent}` : '(no AGENTS.md found — use general wiki conventions)'}
+${agentsContent ? `### ${contextFile}\n${agentsContent}` : '(no wiki schema file found — use general wiki conventions)'}
 
 ### Current Index
 ${indexContent || '(empty)'}

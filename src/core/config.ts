@@ -7,8 +7,12 @@ import type { AgentId } from './agent-adapter.js';
 
 export interface VaultConfig {
   version: string;
-  /** Default agent for all agent-delegated commands */
+  /** Fallback agent for commands that cannot infer their current runtime agent */
   agent?: AgentId;
+  /** Agents configured or installed during onboarding. */
+  agents?: AgentId[];
+  /** Per-agent session roots used by `memex distill --agent <id>`. */
+  sessionDirs?: Partial<Record<AgentId, string>>;
   distill: {
     /** @deprecated use top-level agent */
     agentCommand?: string;
@@ -99,6 +103,9 @@ export async function readConfig(vaultPath: string): Promise<VaultConfig> {
   if (config.agent) {
     config.ingest.agent = config.ingest.agent ?? config.agent;
     config.distill.agent = config.distill.agent ?? config.agent;
+    if (!config.agents || config.agents.length === 0) {
+      config.agents = [config.agent];
+    }
   }
 
   return config;

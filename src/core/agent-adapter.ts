@@ -12,7 +12,7 @@
  * Supported agents:
  *   claude-code   @anthropic-ai/claude-code  → CLAUDE.md
  *   codex         @openai/codex              → AGENTS.md
- *   opencode      opencode-ai                → OPENCODE.md
+ *   opencode      opencode-ai                → AGENTS.md (OpenCode rules; see opencode.ai/docs/rules)
  *   cursor        Cursor IDE agent           → .cursorrules
  *   gemini-cli    @google/gemini-cli         → GEMINI.md
  *   aider         aider-chat                 → .aider.conf.yml context
@@ -20,9 +20,12 @@
  *   generic       Any OpenAI-compatible CLI  → AGENTS.md
  */
 
-import { commandExists } from '../utils/exec.js';
-import { pathExists } from '../utils/fs.js';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { resolveCommandPath } from '../utils/exec.js';
+import { pathExists } from '../utils/fs.js';
 
 // ── Agent Registry ────────────────────────────────────────────────────────────
 
@@ -102,14 +105,14 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
     headless: true,
     description: 'OpenAI Codex CLI agent',
     sessionDir: '.codex/sessions',
-    sessionPattern: '**/*.json',
-    sessionHint: '~/.codex/sessions/*.json',
+    sessionPattern: '**/*.jsonl',
+    sessionHint: '~/.codex/sessions/**/*.jsonl',
   },
   'opencode': {
     name: 'OpenCode',
     bin: 'opencode',
     altBins: ['oc'],
-    contextFile: 'OPENCODE.md',
+    contextFile: 'AGENTS.md',
     promptMode: 'arg',
     extraArgs: ['run'],
     installHint: 'npm install -g opencode-ai  (or: curl ... | sh)',
@@ -180,6 +183,28 @@ export const AGENT_PROFILES: Record<AgentId, AgentProfile> = {
   },
 };
 
+/** Markdown wiki-constitution files recognized at a vault root (any one suffices). */
+export const VAULT_SCHEMA_MARKDOWN_FILENAMES = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  'GEMINI.md',
+] as const;
+
+export function isKnownAgentId(id: string): id is AgentId {
+  return Object.prototype.hasOwnProperty.call(AGENT_PROFILES, id);
+}
+
+/**
+ * Basename for the wiki schema file when initializing a **global** vault:
+ * the agent's `contextFile` when it is a single `*.md` in the vault root,
+ * otherwise `AGENTS.md` (e.g. Cursor / Aider use non-md project context paths).
+ */
+export function vaultSchemaFilenameForAgent(agentId: AgentId): string {
+  const cf = AGENT_PROFILES[agentId]?.contextFile ?? 'AGENTS.md';
+  if (/^[^\\/]+\.md$/i.test(cf)) return cf;
+  return 'AGENTS.md';
+}
+
 // ── Agent Resolution ──────────────────────────────────────────────────────────
 
 /**
@@ -212,9 +237,11 @@ export async function resolveAgent(
 }
 
 async function findBin(profile: AgentProfile): Promise<string | null> {
-  if (await commandExists(profile.bin)) return profile.bin;
+  const resolved = await resolveCommandPath(profile.bin);
+  if (resolved) return resolved;
   for (const alt of profile.altBins ?? []) {
-    if (await commandExists(alt)) return alt;
+    const altResolved = await resolveCommandPath(alt);
+    if (altResolved) return altResolved;
   }
   return null;
 }
@@ -248,6 +275,105 @@ export function buildAgentArgs(
     default:
       return [prompt];
   }
+}
+
+/** True when Node will spawn via cmd.exe (8191-char line budget on Windows). */
+export function agentInvokesViaWindowsCmdShell(
+  resolvedBin: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  return platform === 'win32' && /\.(cmd|bat|ps1)$/i.test(resolvedBin);
+}
+
+/**
+ * Rough size of the prompt-bearing argv tail for `promptMode: 'flag'`.
+ * Used to avoid Windows cmd.exe "command line too long" failures.
+ */
+export function estimateFlagModeArgvChars(profile: AgentProfile, prompt: string): number {
+  if (profile.promptMode !== 'flag' || !profile.promptFlag) return prompt.length;
+  const parts = [...(profile.extraArgs ?? []), profile.promptFlag, prompt];
+  let n = 0;
+  for (const p of parts) n += p.length;
+  // Space + quoting overhead per argument when cmd builds the inner command string
+  return n + parts.length * 4 + 96;
+}
+
+/**
+ * Whether the full prompt must not be passed as a single CLI argument (Windows
+ * `shell: true` + `.cmd` shims, or very large argv on any OS).
+ */
+export function shouldSpillPromptToFile(
+  profile: AgentProfile,
+  prompt: string,
+  resolvedBin: string,
+  platform: NodeJS.Platform = process.platform
+): boolean {
+  if (profile.promptMode !== 'flag' || !profile.promptFlag) return false;
+  const est = estimateFlagModeArgvChars(profile, prompt) + resolvedBin.length;
+  if (platform === 'win32') {
+    if (agentInvokesViaWindowsCmdShell(resolvedBin, platform)) return est > 6500;
+    return est > 24000;
+  }
+  return est > 256000;
+}
+
+export interface PreparedAgentPromptArgs {
+  args: string[];
+  /** Remove temp prompt file/dir; call in `finally` after the child exits. */
+  cleanup: () => void;
+  /** String actually passed as the prompt CLI argument (full prompt or short wrapper). */
+  argvPromptValue: string;
+  usedPromptFile: boolean;
+}
+
+function buildPromptFileWrapperInstruction(absolutePath: string): string {
+  const p = absolutePath.replace(/\\/g, '/');
+  return [
+    'You are running a memex CLI–delegated task.',
+    'Open the following UTF-8 Markdown file with your Read tool and follow every instruction inside exactly.',
+    'Do not paste the entire file into the terminal.',
+    '',
+    'Instruction file:',
+    p,
+  ].join('\n');
+}
+
+/**
+ * Builds argv for an agent, writing the prompt to a temp `.md` file when the
+ * Windows cmd.exe line limit (or other argv size limits) would be exceeded.
+ */
+export function prepareAgentPromptArgs(
+  profile: AgentProfile,
+  resolvedBin: string,
+  prompt: string,
+  opts?: { taskSlug?: string; platform?: NodeJS.Platform }
+): PreparedAgentPromptArgs {
+  const platform = opts?.platform ?? process.platform;
+  if (!shouldSpillPromptToFile(profile, prompt, resolvedBin, platform)) {
+    return {
+      args: buildAgentArgs(profile, resolvedBin, prompt),
+      cleanup: () => {},
+      argvPromptValue: prompt,
+      usedPromptFile: false,
+    };
+  }
+  const slug = (opts?.taskSlug ?? 'memex-prompt').replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 80);
+  const dir = mkdtempSync(join(tmpdir(), 'memex-agent-'));
+  const file = join(dir, `${slug}.md`);
+  writeFileSync(file, prompt, 'utf8');
+  const wrapper = buildPromptFileWrapperInstruction(file);
+  return {
+    args: buildAgentArgs(profile, resolvedBin, wrapper),
+    cleanup: () => {
+      try {
+        rmSync(dir, { recursive: true, force: true });
+      } catch {
+        /* ignore */
+      }
+    },
+    argvPromptValue: wrapper,
+    usedPromptFile: true,
+  };
 }
 
 // ── Context File Management ───────────────────────────────────────────────────

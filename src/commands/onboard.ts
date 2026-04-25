@@ -7,7 +7,7 @@
  *
  *   Step 1 — Choose your AI agent (with auto-detect)
  *   Step 2 — Confirm / set session directory
- *   Step 3 — Initialize global vault (if not exists)
+ *   Step 3 — Initialize default wiki vault under ~/.llmwiki (if not exists)
  *   Step 4 — Install slash commands for the chosen agent
  *   Step 5 — Summary & next steps
  *
@@ -15,13 +15,14 @@
  * automatically use the configured agent and session paths.
  */
 
-import { select, confirm, input } from '@inquirer/prompts';
+import { checkbox, select, confirm, input } from '@inquirer/prompts';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { logger } from '../utils/logger.js';
 import { pathExists, normalizePath } from '../utils/fs.js';
 import { AGENT_PROFILES, AgentId, detectInstalledAgents } from '../core/agent-adapter.js';
-import { writeGlobalConfig, readGlobalConfig } from '../core/config.js';
+import { writeGlobalConfig } from '../core/config.js';
+import { defaultHomeWikiVaultPath, isValidVault } from '../core/vault.js';
 import { initCommand } from './init.js';
 import { installHooksCommand } from './install-hooks.js';
 import { contextCommand } from './context.js';
@@ -46,9 +47,9 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   console.log('  ╚═══════════════════════════════════════════════════╝');
   console.log();
 
-  // ── Step 1: Choose Agent ──────────────────────────────────────────────────
+  // ── Step 1: Choose Agents ─────────────────────────────────────────────────
 
-  logger.info('Step 1/5 — Choose your AI agent\n');
+  logger.info('Step 1/5 — Choose your AI agents\n');
 
   // Auto-detect installed agents
   const installed = await detectInstalledAgents();
@@ -57,16 +58,24 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   }
 
   let agentId: AgentId;
+  let configuredAgentIds: AgentId[] = [];
 
   if (options.agent) {
-    agentId = options.agent as AgentId;
-    if (!AGENT_PROFILES[agentId]) {
-      logger.error(`Unknown agent: ${options.agent}`);
+    const requestedAgents = options.agent
+      .split(',')
+      .map((id) => id.trim())
+      .filter(Boolean);
+    const unknown = requestedAgents.filter((id) => !AGENT_PROFILES[id as AgentId]);
+    if (unknown.length > 0 || requestedAgents.length === 0) {
+      logger.error(`Unknown agent: ${unknown.join(', ') || options.agent}`);
       return;
     }
+    configuredAgentIds = Array.from(new Set(requestedAgents)) as AgentId[];
+    agentId = configuredAgentIds[0]!;
     logger.info(`Using pre-selected agent: ${agentId}`);
   } else if (options.yes && installed.length > 0) {
     agentId = installed[0].id;
+    configuredAgentIds = [agentId];
     logger.info(`Auto-selected: ${agentId}`);
   } else {
     // Build choices with installed status
@@ -77,68 +86,63 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
         return {
           name: `${profile.name} (${id})${badge}`,
           value: id,
+          checked: installed.length > 0 ? isInstalled : id === 'claude-code',
           description: `${profile.description} → ${profile.contextFile}`,
         };
       }
     );
 
-    agentId = await select({
-      message: 'Which AI agent do you primarily use?',
+    configuredAgentIds = await checkbox({
+      message: 'Which AI agents do you use with memex?',
       choices,
-      default: installed.length > 0 ? installed[0].id : 'claude-code',
+      required: true,
     });
+
+    agentId = configuredAgentIds[0]!;
   }
 
   const profile = AGENT_PROFILES[agentId];
   console.log();
-  logger.success(`Selected: ${profile.name} (context file: ${profile.contextFile})`);
+  logger.success(`Fallback agent: ${profile.name} (context file: ${profile.contextFile})`);
+  logger.info(`Configured agents: ${configuredAgentIds.join(', ')}`);
+  logger.info('Each installed agent command will identify its own runtime agent when invoking memex.');
 
   // ── Step 2: Session Directory ─────────────────────────────────────────────
 
   console.log();
   logger.info('Step 2/5 — Session directory\n');
 
-  let sessionDir = profile.sessionDir
-    ? join(home, profile.sessionDir).replace(/\\/g, '/')
-    : '';
+  const sessionDirs: Partial<Record<AgentId, string>> = {};
 
-  if (sessionDir) {
-    const sessionExists = await pathExists(sessionDir);
-    if (sessionExists) {
-      logger.success(`Found session directory: ${sessionDir}`);
-    } else {
-      logger.warn(`Expected session directory not found: ${sessionDir}`);
-    }
+  for (const configuredAgentId of configuredAgentIds) {
+    const configuredProfile = AGENT_PROFILES[configuredAgentId];
+    let agentSessionDir = configuredProfile.sessionDir
+      ? join(home, configuredProfile.sessionDir).replace(/\\/g, '/')
+      : '';
 
-    if (!options.yes) {
-      const useDefault = await confirm({
-        message: `Use ${profile.sessionHint ?? sessionDir} as session directory?`,
-        default: true,
-      });
-
-      if (!useDefault) {
-        const customDir = await input({
-          message: 'Enter your session directory path:',
-          default: sessionDir,
-        });
-        sessionDir = normalizePath(customDir);
+    if (agentSessionDir) {
+      const sessionExists = await pathExists(agentSessionDir);
+      if (sessionExists) {
+        logger.success(`${configuredProfile.name}: ${agentSessionDir}`);
+      } else {
+        logger.warn(`${configuredProfile.name}: expected session directory not found yet: ${agentSessionDir}`);
       }
+      sessionDirs[configuredAgentId] = agentSessionDir;
+      continue;
     }
-  } else {
-    logger.info(`${profile.name} does not have a known session directory.`);
+
+    logger.info(`${configuredProfile.name} does not have a known session directory.`);
     if (!options.yes) {
       const customDir = await input({
-        message: 'Enter session directory path (or press Enter to skip):',
+        message: `Enter ${configuredProfile.name} session directory path (or press Enter to skip):`,
         default: '',
       });
       if (customDir) {
-        sessionDir = normalizePath(customDir);
+        agentSessionDir = normalizePath(customDir);
+        sessionDirs[configuredAgentId] = agentSessionDir;
+        logger.success(`${configuredProfile.name}: ${agentSessionDir}`);
       }
     }
-  }
-
-  if (sessionDir) {
-    logger.success(`Session directory: ${sessionDir}`);
   }
 
   // ── Step 3: Initialize Vault ──────────────────────────────────────────────
@@ -146,23 +150,24 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   console.log();
   logger.info('Step 3/5 — Initialize knowledge base vault\n');
 
-  const globalVaultPath = join(home, '.llmwiki', 'global').replace(/\\/g, '/');
-  const vaultExists = await pathExists(join(globalVaultPath, 'AGENTS.md'));
+  const wikiVaultPath = await defaultHomeWikiVaultPath();
+  const vaultExists = await isValidVault(wikiVaultPath);
 
   if (vaultExists) {
-    logger.success(`Global vault already exists: ${globalVaultPath}`);
+    logger.success(`Wiki vault already exists: ${wikiVaultPath}`);
   } else {
     let doInit = true;
     if (!options.yes) {
+      const defaultTarget = join(home, '.llmwiki').replace(/\\/g, '/');
       doInit = await confirm({
-        message: `Initialize global vault at ${globalVaultPath}?`,
+        message: `Initialize your default wiki vault at ${defaultTarget}?`,
         default: true,
       });
     }
 
     if (doInit) {
-      await initCommand({ scope: 'global' }, cwd);
-      logger.success('Global vault initialized.');
+      await initCommand({ scope: 'global', agent: agentId }, home);
+      logger.success(`Wiki vault initialized at ${(await defaultHomeWikiVaultPath()).replace(/\\/g, '/')}.`);
     } else {
       logger.info('Skipped vault initialization.');
     }
@@ -173,22 +178,46 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   console.log();
   logger.info('Step 4/5 — Install slash commands\n');
 
+  logger.info('This installs slash commands plus the ai-memex skill when the agent supports skills.');
+
   let doInstallHooks = true;
   let hooksProjectDir = cwd;
+  let hooksScope: 'project' | 'user' = 'project';
+  let hookAgentIds: AgentId[] = [...configuredAgentIds];
 
   if (!options.yes) {
-    doInstallHooks = await confirm({
-      message: `Install /memex:* slash commands for ${profile.name}?`,
-      default: true,
+    const installTarget = await select({
+      message: `Where should memex install /memex:* commands and skills for the selected agents?`,
+      choices: [
+        {
+          name: `Current project (${cwd})`,
+          value: 'project',
+          description: 'Best for team repos or project-pinned memex workflows.',
+        },
+        {
+          name: 'User profile',
+          value: 'user',
+          description: 'Best for personal use across all projects; installs under your home agent config.',
+        },
+        {
+          name: 'Skip for now',
+          value: 'skip',
+          description: 'You can run `memex install-hooks` later.',
+        },
+      ],
+      default: 'project',
     });
 
-    if (doInstallHooks) {
-      const useCurrentDir = await confirm({
-        message: `Install in current directory? (${cwd})`,
-        default: true,
+    doInstallHooks = installTarget !== 'skip';
+    hooksScope = installTarget === 'user' ? 'user' : 'project';
+
+    if (doInstallHooks && hooksScope === 'project') {
+      const customizeProjectDir = await confirm({
+        message: 'Use a different project directory?',
+        default: false,
       });
 
-      if (!useCurrentDir) {
+      if (customizeProjectDir) {
         const customProjectDir = await input({
           message: 'Enter project directory:',
           default: cwd,
@@ -199,10 +228,13 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   }
 
   if (doInstallHooks) {
-    await installHooksCommand({
-      agent: agentId,
-      projectDir: hooksProjectDir,
-    }, cwd);
+    for (const hookAgentId of hookAgentIds) {
+      await installHooksCommand({
+        agent: hookAgentId,
+        scope: hooksScope,
+        projectDir: hooksProjectDir,
+      }, cwd);
+    }
   } else {
     logger.info('Skipped hook installation. Run `memex install-hooks` later.');
   }
@@ -230,7 +262,7 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
       await contextCommand(
         {
           subcommand: 'install',
-          agent: agentId,
+          agent: doInstallHooks ? hookAgentIds.join(',') : agentId,
           project: hooksProjectDir,
           mode: 'digest',
         },
@@ -250,9 +282,13 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   logger.info('Step 5/5 — Saving configuration\n');
 
   // Save to global config
-  const configPatch: Record<string, unknown> = { agent: agentId };
-  if (sessionDir) {
-    configPatch.sessionDir = sessionDir;
+  const configPatch: Record<string, unknown> = { agent: agentId, agents: configuredAgentIds };
+  if (Object.keys(sessionDirs).length > 0) {
+    configPatch.sessionDirs = sessionDirs;
+    const fallbackSessionDir = sessionDirs[agentId];
+    if (fallbackSessionDir) {
+      configPatch.sessionDir = fallbackSessionDir;
+    }
   }
   await writeGlobalConfig(configPatch as any);
   logger.success(`Saved to ~/.llmwiki/config.json`);
@@ -264,11 +300,12 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   console.log('  │  Onboarding complete!                             │');
   console.log('  └───────────────────────────────────────────────────┘');
   console.log();
-  console.log(`  Agent:           ${profile.name} (${agentId})`);
+  console.log(`  Fallback agent:  ${profile.name} (${agentId})`);
+  console.log(`  Agents:          ${configuredAgentIds.join(', ')}`);
   console.log(`  Context file:    ${profile.contextFile}`);
-  console.log(`  Session dir:     ${sessionDir || '(not set)'}`);
-  console.log(`  Vault:           ${globalVaultPath}`);
-  console.log(`  Hooks:           ${doInstallHooks ? hooksProjectDir : '(skipped)'}`);
+  console.log(`  Session dirs:    ${Object.keys(sessionDirs).length > 0 ? `${Object.keys(sessionDirs).length} configured` : '(not set)'}`);
+  console.log(`  Vault:           ${await defaultHomeWikiVaultPath()}`);
+  console.log(`  Hooks:           ${doInstallHooks ? `${hooksScope} (${hooksScope === 'user' ? 'user agent config' : hooksProjectDir})` : '(skipped)'}`);
   console.log();
   logger.info('What to do next:\n');
   console.log('  1. Fetch some knowledge:');
@@ -280,8 +317,8 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
   console.log('  3. In your agent session, use slash commands:');
 
   if (agentId === 'claude-code') {
-    console.log('     > /memex:search "your topic"');
-    console.log('     > /memex:inject --task "your current task"');
+    console.log('     > /memex:query "your topic"');
+    console.log('     > /memex:capture https://example.com');
     console.log('     > /memex:distill');
   } else if (agentId === 'cursor') {
     console.log('     Ask: "run memex search for React hooks"');
@@ -294,9 +331,10 @@ export async function onboardCommand(options: OnboardOptions, cwd: string): Prom
 
   console.log();
   console.log('  4. Distill a past session:');
-  if (sessionDir) {
+  const fallbackSessionDir = sessionDirs[agentId];
+  if (fallbackSessionDir) {
     console.log(`     $ memex distill --latest`);
-    console.log(`     $ memex distill "${sessionDir}/<session-file>"`);
+    console.log(`     $ memex distill --agent ${agentId}`);
   } else {
     console.log('     $ memex distill <session-file>');
   }

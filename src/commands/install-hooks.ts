@@ -14,8 +14,8 @@
  *
  * Generated file locations per agent:
  *
- *   claude-code  →  .claude/commands/memex-*.md     slash: /memex:*
- *   codex        →  AGENTS.md  (appends ## Memex Commands section)
+ *   claude-code  →  .claude/commands/memex/*.md     slash: /memex:*
+ *   codex        →  ~/.codex/prompts/memex/*.md + AGENTS.md section
  *   opencode     →  .opencode/commands/memex-*.md   slash: /memex:*
  *   gemini-cli   →  .gemini/commands/memex-*.md     slash: /memex:*
  *   cursor       →  .cursor/rules/memex.mdc
@@ -24,15 +24,23 @@
 
 import { writeFileUtf8, pathExists } from '../utils/fs.js';
 import { logger } from '../utils/logger.js';
-import { join } from 'node:path';
-import { mkdir, readFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
+import { dirname, join } from 'node:path';
+import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 
 export interface InstallHooksOptions {
   agent?: string;
   events?: string;
   dryRun?: boolean;
+  /** Install target: project writes under projectDir/cwd, user writes under the user's home directory. */
+  scope?: 'project' | 'user';
   /** Project directory to install hooks into (default: cwd) */
   projectDir?: string;
+}
+
+export function resolveInstallBaseDir(options: InstallHooksOptions, cwd: string): string {
+  return (options.scope ?? 'project') === 'user' ? homedir() : (options.projectDir ?? cwd);
 }
 
 // ── Command definitions ───────────────────────────────────────────────────────
@@ -43,14 +51,34 @@ interface MemexCommand {
   usage: string;
   shellCmd: string;
   examples: string[];
+  workflow?: string;
+  reference?: string;
+  cliHint?: string;
 }
 
 const MEMEX_COMMANDS: MemexCommand[] = [
+  {
+    name: 'capture',
+    description: 'Capture URLs, files, pasted text, or search results into the memex raw layer.',
+    usage: '/memex:capture <url|file|text|query>',
+    shellCmd: 'memex fetch $ARGS',
+    workflow: 'Capture',
+    reference: 'references/capture-workflow.md',
+    cliHint: 'Use `memex fetch` when the input is a URL, sitemap, or keyword query.',
+    examples: [
+      '/memex:capture https://react.dev/reference/react/hooks',
+      '/memex:capture "agent memory design tradeoffs"',
+      '/memex:capture ./notes/architecture.md',
+    ],
+  },
   {
     name: 'ingest',
     description: 'Ingest raw content into wiki pages. Delegates semantic processing to the AI agent.',
     usage: '/memex:ingest [target]',
     shellCmd: 'memex ingest $ARGS',
+    workflow: 'Ingest',
+    reference: 'references/ingest-workflow.md',
+    cliHint: 'Use `memex search` to find related pages and `memex lint` after substantial edits.',
     examples: [
       '/memex:ingest                        # ingest all raw/ files',
       '/memex:ingest raw/personal           # ingest personal scene only',
@@ -73,6 +101,9 @@ const MEMEX_COMMANDS: MemexCommand[] = [
     description: 'Distill the current or a past session into a structured raw wiki document.',
     usage: '/memex:distill [input] [--role <role>]',
     shellCmd: 'memex distill $ARGS',
+    workflow: 'Distill',
+    reference: 'references/distill-workflow.md',
+    cliHint: 'If no input is provided, use `memex distill --latest --agent <current-agent>` to capture the current agent session.',
     examples: [
       '/memex:distill                              # distill current session',
       '/memex:distill --role backend-engineer      # extract role-specific best practices',
@@ -90,10 +121,26 @@ const MEMEX_COMMANDS: MemexCommand[] = [
     ],
   },
   {
+    name: 'query',
+    description: 'Answer from the durable memex wiki using the ai-memex query workflow.',
+    usage: '/memex:query <question>',
+    shellCmd: 'memex search $ARGS',
+    workflow: 'Query',
+    reference: 'references/query-workflow.md',
+    cliHint: 'Use `memex search` to narrow candidate wiki pages, then answer with citations.',
+    examples: [
+      '/memex:query "what do I know about agent memory tradeoffs?"',
+      '/memex:query "how did we decide CLI vs skill boundaries?"',
+    ],
+  },
+  {
     name: 'status',
     description: 'Show vault overview: page count, scenes, recent activity.',
     usage: '/memex:status',
     shellCmd: 'memex status',
+    workflow: 'Status',
+    reference: 'references/vault-protocol.md',
+    cliHint: 'Run `memex status`, then summarize the vault state and likely next step.',
     examples: ['/memex:status'],
   },
   {
@@ -112,6 +159,20 @@ const MEMEX_COMMANDS: MemexCommand[] = [
     usage: '/memex:lint',
     shellCmd: 'memex lint',
     examples: ['/memex:lint', '/memex:lint --json'],
+  },
+  {
+    name: 'repair',
+    description: 'Run wiki health checks and repair safe issues through the ai-memex repair workflow.',
+    usage: '/memex:repair [--safe|--review]',
+    shellCmd: 'memex lint',
+    workflow: 'Repair',
+    reference: 'references/repair-workflow.md',
+    cliHint: 'Run `memex lint` and `memex link-check`; auto-fix only clearly safe mechanical issues.',
+    examples: [
+      '/memex:repair',
+      '/memex:repair --safe',
+      '/memex:repair --review',
+    ],
   },
   {
     name: 'inject',
@@ -143,7 +204,97 @@ interface HookFile {
   description: string;
 }
 
-function buildClaudeCodeCommandFile(cmd: MemexCommand): string {
+function skillInstallRoot(projectDir: string, agentType: string): string | null {
+  switch (agentType) {
+    case 'claude-code':
+      return join(projectDir, '.claude', 'skills', 'ai-memex').replace(/\\/g, '/');
+    case 'codex':
+      return join(projectDir, '.codex', 'skills', 'ai-memex').replace(/\\/g, '/');
+    default:
+      return null;
+  }
+}
+
+function codexHomeDir(): string {
+  return (process.env.CODEX_HOME || join(homedir(), '.codex')).replace(/\\/g, '/');
+}
+
+function codexPromptsDir(): string {
+  return join(codexHomeDir(), 'prompts').replace(/\\/g, '/');
+}
+
+async function loadAiMemexSkillFiles(projectDir: string, agentType: string): Promise<HookFile[]> {
+  const currentFile = fileURLToPath(import.meta.url);
+  const templateRoot = join(dirname(currentFile), '..', '..', 'templates', 'skills', 'ai-memex');
+  if (!(await pathExists(templateRoot))) return [];
+  const targetRoot = skillInstallRoot(projectDir, agentType);
+  if (!targetRoot) return [];
+
+  const files: HookFile[] = [];
+  await collectTemplateFiles(templateRoot, templateRoot, targetRoot, files);
+  return files;
+}
+
+async function collectTemplateFiles(
+  root: string,
+  dir: string,
+  targetRoot: string,
+  files: HookFile[],
+): Promise<void> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await collectTemplateFiles(root, fullPath, targetRoot, files);
+      continue;
+    }
+    if (!entry.isFile()) continue;
+
+    const relativePath = fullPath.slice(root.length + 1).replace(/\\/g, '/');
+    files.push({
+      path: join(targetRoot, relativePath).replace(/\\/g, '/'),
+      content: await readFile(fullPath, 'utf-8'),
+      description: `ai-memex skill ${relativePath}`,
+    });
+  }
+}
+
+function agentRuntimeHint(agentType: string): string {
+  return `Current memex agent: \`${agentType}\`
+
+When calling a memex CLI command that delegates semantic work to an agent, pass \`--agent ${agentType}\` unless the user already provided an explicit \`--agent\`.`;
+}
+
+function buildClaudeCodeCommandFile(cmd: MemexCommand, agentType: string): string {
+  if (cmd.workflow) {
+    return `# memex ${cmd.name}
+
+${cmd.description}
+
+## Usage
+
+\`${cmd.usage}\`
+
+## Examples
+
+${cmd.examples.map(e => `- \`${e}\``).join('\n')}
+
+## Instructions
+
+Use the installed \`ai-memex\` skill.
+
+- Workflow: ${cmd.workflow}
+- Reference: \`${cmd.reference}\`
+- User arguments: \`$ARGS\`
+- Current agent: \`${agentType}\`
+- CLI hint: ${cmd.cliHint}
+
+When the workflow calls a memex CLI command that delegates semantic work to an agent, pass \`--agent ${agentType}\` unless the user already provided an explicit \`--agent\`.
+
+Do not treat this slash command as a raw shell shortcut. Let the skill choose the workflow, read the relevant reference, and call \`memex\` CLI primitives only when useful.
+`;
+  }
+
   return `# memex ${cmd.name}
 
 ${cmd.description}
@@ -157,6 +308,8 @@ ${cmd.description}
 ${cmd.examples.map(e => `- \`${e}\``).join('\n')}
 
 ## Instructions
+
+${agentRuntimeHint(agentType)}
 
 Run the following shell command, substituting \`$ARGS\` with any arguments
 the user provided after \`/memex:${cmd.name}\`:
@@ -181,7 +334,16 @@ Show all available memex knowledge base commands.
 memex --help
 \`\`\`
 
-## Available slash commands
+## Recommended agent-native workflows
+
+- \`/memex:capture\` — capture sources into raw/
+- \`/memex:ingest\` — compile raw material into wiki pages
+- \`/memex:query\` — answer from the durable wiki
+- \`/memex:distill\` — save useful conversations as raw session material
+- \`/memex:repair\` — lint and safely repair the wiki
+- \`/memex:status\` — inspect vault state
+
+## Compatible CLI shortcuts
 
 ${MEMEX_COMMANDS.map(cmd => `- \`/memex:${cmd.name}\` — ${cmd.description}`).join('\n')}
 
@@ -189,29 +351,29 @@ ${MEMEX_COMMANDS.map(cmd => `- \`/memex:${cmd.name}\` — ${cmd.description}`).j
 
 \`\`\`
 /memex:status                                # see what's in the knowledge base
-/memex:search "topic"                        # find relevant pages
-/memex:inject --task "current task"          # load context for this session
-/memex:fetch https://docs.example.com        # fetch documentation
+/memex:capture https://docs.example.com      # capture documentation
 /memex:ingest                                # process raw files into wiki pages
-/memex:distill --role backend-engineer       # distill session into best practices
+/memex:query "topic"                         # answer from durable wiki knowledge
+/memex:distill                               # distill useful session knowledge
+/memex:repair                                # lint and safely repair the wiki
 \`\`\`
 `;
 }
 
-function generateClaudeCodeHooks(projectDir: string): HookFile[] {
-  const commandsDir = join(projectDir, '.claude', 'commands').replace(/\\/g, '/');
+function generateClaudeCodeHooks(projectDir: string, agentType = 'claude-code'): HookFile[] {
+  const commandsDir = join(projectDir, '.claude', 'commands', 'memex').replace(/\\/g, '/');
   const files: HookFile[] = [];
 
   for (const cmd of MEMEX_COMMANDS) {
     files.push({
-      path: join(commandsDir, `memex-${cmd.name}.md`).replace(/\\/g, '/'),
-      content: buildClaudeCodeCommandFile(cmd),
+      path: join(commandsDir, `${cmd.name}.md`).replace(/\\/g, '/'),
+      content: buildClaudeCodeCommandFile(cmd, agentType),
       description: `/memex:${cmd.name}`,
     });
   }
 
   files.push({
-    path: join(commandsDir, 'memex-help.md').replace(/\\/g, '/'),
+    path: join(commandsDir, 'help.md').replace(/\\/g, '/'),
     content: buildClaudeCodeHelpFile(),
     description: '/memex:help',
   });
@@ -221,7 +383,111 @@ function generateClaudeCodeHooks(projectDir: string): HookFile[] {
 
 // ── OpenCode command file generator ──────────────────────────────────────────
 
-function generateOpenCodeHooks(projectDir: string): HookFile[] {
+function buildCodexPromptFile(cmd: MemexCommand, agentType = 'codex'): string {
+  if (cmd.workflow) {
+    return `---
+description: "${cmd.description}"
+---
+
+# memex ${cmd.name}
+
+${cmd.description}
+
+Use the installed \`ai-memex\` skill.
+
+- Workflow: ${cmd.workflow}
+- Reference: \`${cmd.reference}\`
+- User arguments: \`$ARGUMENTS\`
+- Current agent: \`${agentType}\`
+- CLI hint: ${cmd.cliHint}
+
+When the workflow calls a memex CLI command that delegates semantic work to an agent, pass \`--agent ${agentType}\` unless the user already provided an explicit \`--agent\`.
+
+Do not treat this slash command as a raw shell shortcut. Let the skill choose the workflow, read the relevant reference, and call \`memex\` CLI primitives only when useful.
+`;
+  }
+
+  return `---
+description: "${cmd.description}"
+---
+
+# memex ${cmd.name}
+
+${cmd.description}
+
+${agentRuntimeHint(agentType)}
+
+Run the following shell command, substituting \`$ARGUMENTS\` with any arguments
+the user provided after the slash command:
+
+\`\`\`bash
+${cmd.shellCmd.replace('$ARGS', '$ARGUMENTS')}
+\`\`\`
+
+Report the command output to the user. If the command modifies wiki pages,
+briefly summarize what changed.
+`;
+}
+
+function buildCodexHelpPromptFile(): string {
+  return `---
+description: "Show all available ai-memex workflows and CLI shortcuts."
+---
+
+# memex help
+
+Use the installed \`ai-memex\` skill when the user wants a semantic workflow.
+
+## Recommended workflows
+
+- \`/memex:capture\` - capture sources into raw/
+- \`/memex:ingest\` - compile raw material into wiki pages
+- \`/memex:query\` - answer from the durable wiki
+- \`/memex:distill\` - save useful conversations as raw session material
+- \`/memex:repair\` - lint and safely repair the wiki
+- \`/memex:status\` - inspect vault state
+
+## CLI shortcuts
+
+${MEMEX_COMMANDS.map(cmd => `- \`${cmd.shellCmd.replace('$ARGS', '[args]')}\` - ${cmd.description}`).join('\n')}
+`;
+}
+
+function generateCodexPromptFiles(agentType = 'codex'): HookFile[] {
+  const promptsDir = join(codexPromptsDir(), 'memex').replace(/\\/g, '/');
+  const files: HookFile[] = MEMEX_COMMANDS.map((cmd) => ({
+    path: join(promptsDir, `${cmd.name}.md`).replace(/\\/g, '/'),
+    content: buildCodexPromptFile(cmd, agentType),
+    description: `/memex:${cmd.name}`,
+  }));
+
+  files.push({
+    path: join(promptsDir, 'help.md').replace(/\\/g, '/'),
+    content: buildCodexHelpPromptFile(),
+    description: '/memex:help',
+  });
+
+  // Codex currently discovers top-level prompt files reliably. Keep the
+  // nested files for agents that support namespaced prompts, and add stable
+  // top-level aliases that work on Windows where ":" cannot be used in names.
+  for (const cmd of MEMEX_COMMANDS) {
+    files.push({
+      path: join(codexPromptsDir(), `memex-${cmd.name}.md`).replace(/\\/g, '/'),
+      content: buildCodexPromptFile(cmd, agentType),
+      description: `/memex-${cmd.name}`,
+    });
+  }
+
+  files.push({
+    path: join(codexPromptsDir(), 'memex-help.md').replace(/\\/g, '/'),
+    content: buildCodexHelpPromptFile(),
+    description: '/memex-help',
+  });
+
+  return files;
+}
+
+function generateOpenCodeHooks(projectDir: string, agentType = 'opencode'): HookFile[] {
   const commandsDir = join(projectDir, '.opencode', 'commands').replace(/\\/g, '/');
   return MEMEX_COMMANDS.map(cmd => ({
     path: join(commandsDir, `memex-${cmd.name}.md`).replace(/\\/g, '/'),
@@ -233,6 +499,8 @@ description: "${cmd.description}"
 # memex ${cmd.name}
 
 ${cmd.description}
+
+${agentRuntimeHint(agentType)}
 
 **Usage:** \`${cmd.usage}\`
 
@@ -250,13 +518,15 @@ ${cmd.examples.map(e => `- \`${e}\``).join('\n')}
 
 // ── Gemini CLI command file generator ────────────────────────────────────────
 
-function generateGeminiCliHooks(projectDir: string): HookFile[] {
+function generateGeminiCliHooks(projectDir: string, agentType = 'gemini-cli'): HookFile[] {
   const commandsDir = join(projectDir, '.gemini', 'commands').replace(/\\/g, '/');
   return MEMEX_COMMANDS.map(cmd => ({
     path: join(commandsDir, `memex-${cmd.name}.md`).replace(/\\/g, '/'),
     content: `# /memex:${cmd.name}
 
 ${cmd.description}
+
+${agentRuntimeHint(agentType)}
 
 Usage: \`${cmd.usage}\`
 
@@ -274,7 +544,7 @@ ${cmd.examples.map(e => `  ${e}`).join('\n')}
 
 // ── Cursor rules generator ────────────────────────────────────────────────────
 
-function generateCursorHooks(projectDir: string): HookFile[] {
+function generateCursorHooks(projectDir: string, agentType = 'cursor'): HookFile[] {
   const content = `---
 description: memex knowledge base commands — use these to manage the LLM wiki
 globs: ["**/*"]
@@ -285,6 +555,8 @@ alwaysApply: false
 
 You have access to the \`memex\` CLI for managing a persistent knowledge base.
 Use these commands proactively to store and retrieve knowledge across sessions.
+
+${agentRuntimeHint(agentType)}
 
 ## Available Commands
 
@@ -315,12 +587,35 @@ ${cmd.examples.map(e => `- \`${e}\``).join('\n')}
 
 // ── AGENTS.md section generator (codex / generic) ────────────────────────────
 
-function buildAgentsMdSection(): string {
+function buildAgentsMdSection(agentType = 'codex'): string {
   return `
 ## Memex Knowledge Base Commands
 
 You have access to the \`memex\` CLI for managing a persistent knowledge base (LLM Wiki).
 Use these commands to store and retrieve knowledge across sessions.
+
+${agentRuntimeHint(agentType)}
+
+${agentType === 'codex' ? `### Codex Entry Points
+
+Codex custom slash prompts are installed at:
+
+\`${codexPromptsDir()}/memex/*.md\`
+
+After restarting Codex, use the top-level aliases:
+
+- \`/memex-capture <source>\`
+- \`/memex-ingest [target]\`
+- \`/memex-query <question>\`
+- \`/memex-distill [input]\`
+- \`/memex-repair\`
+- \`/memex-status\`
+
+If your Codex build supports namespaced prompt folders, the original \`/memex:*\`
+form may also work. The \`/memex-*\` aliases are the compatibility path.
+
+For \`/memex:distill\` without an explicit input, run \`memex distill --latest --agent codex\` so the current Codex session directory is used.
+` : ''}
 
 ### Available Commands
 
@@ -347,16 +642,65 @@ export async function installHooksCommand(
   options: InstallHooksOptions,
   cwd: string
 ): Promise<void> {
-  const projectDir = options.projectDir ?? cwd;
+  const scope = options.scope ?? 'project';
+  const projectDir = resolveInstallBaseDir(options, cwd);
   const agentType = (options.agent ?? 'claude-code') as string;
 
   logger.info(`Installing memex slash commands for: ${agentType}`);
-  logger.info(`Project directory: ${projectDir}`);
+  logger.info(`Install scope: ${scope}`);
+  logger.info(`${scope === 'user' ? 'User directory' : 'Project directory'}: ${projectDir}`);
 
   // ── codex / generic: append to AGENTS.md ─────────────────────────────────
-  if (agentType === 'codex' || agentType === 'generic') {
+  if (agentType === 'codex') {
     const agentsMdPath = join(projectDir, 'AGENTS.md').replace(/\\/g, '/');
-    const section = buildAgentsMdSection();
+    const section = buildAgentsMdSection(agentType);
+    const promptFiles = generateCodexPromptFiles(agentType);
+    const skillFiles = await loadAiMemexSkillFiles(projectDir, agentType);
+
+    if (options.dryRun) {
+      if (scope === 'project') {
+      logger.info(`Would append to: ${agentsMdPath}`);
+      }
+      logger.info(`Would create ${promptFiles.length} Codex prompt file(s) under ${codexPromptsDir()}`);
+      logger.info(`Would create ${skillFiles.length} Codex skill file(s) under ${projectDir}/.codex/skills/ai-memex`);
+      console.log('\n--- AGENTS.md section ---\n');
+      console.log(section);
+      console.log('--- END ---\n');
+      return;
+    }
+
+    if (scope === 'project') {
+      let existing = '';
+      if (await pathExists(agentsMdPath)) {
+        existing = await readFile(agentsMdPath, 'utf-8');
+        if (existing.includes('## Memex Knowledge Base Commands')) {
+          logger.warn('AGENTS.md already has a memex section. Skipping AGENTS.md update.');
+        } else {
+          await writeFileUtf8(agentsMdPath, existing + '\n' + section);
+          logger.success(`Updated ${agentsMdPath}`);
+        }
+      } else {
+        existing = '# Agent Instructions\n';
+        await writeFileUtf8(agentsMdPath, existing + '\n' + section);
+        logger.success(`Updated ${agentsMdPath}`);
+      }
+    }
+
+    for (const f of [...promptFiles, ...skillFiles]) {
+      const dir = f.path.substring(0, f.path.lastIndexOf('/'));
+      await mkdir(dir, { recursive: true });
+      await writeFileUtf8(f.path, f.content);
+      logger.success(`Created: ${f.path}`);
+    }
+
+    printUsageHint(agentType);
+    return;
+  }
+
+  // ── File-based agents ─────────────────────────────────────────────────────
+  if (agentType === 'generic') {
+    const agentsMdPath = join(projectDir, 'AGENTS.md').replace(/\\/g, '/');
+    const section = buildAgentsMdSection(agentType);
 
     if (options.dryRun) {
       logger.info(`Would append to: ${agentsMdPath}`);
@@ -383,21 +727,21 @@ export async function installHooksCommand(
     return;
   }
 
-  // ── File-based agents ─────────────────────────────────────────────────────
   let files: HookFile[] = [];
 
   switch (agentType) {
     case 'claude-code':
-      files = generateClaudeCodeHooks(projectDir);
+      files = generateClaudeCodeHooks(projectDir, agentType);
+      files.push(...await loadAiMemexSkillFiles(projectDir, agentType));
       break;
     case 'opencode':
-      files = generateOpenCodeHooks(projectDir);
+      files = generateOpenCodeHooks(projectDir, agentType);
       break;
     case 'gemini-cli':
-      files = generateGeminiCliHooks(projectDir);
+      files = generateGeminiCliHooks(projectDir, agentType);
       break;
     case 'cursor':
-      files = generateCursorHooks(projectDir);
+      files = generateCursorHooks(projectDir, agentType);
       break;
     default:
       logger.error(`Unknown agent: ${agentType}`);
@@ -425,7 +769,7 @@ export async function installHooksCommand(
     created++;
   }
 
-  logger.info(`\nInstalled ${created} command file(s) for ${agentType}.`);
+  logger.info(`\nInstalled ${created} file(s) for ${agentType}.`);
   printUsageHint(agentType);
 }
 
@@ -436,13 +780,14 @@ function printUsageHint(agentType: string): void {
   switch (agentType) {
     case 'claude-code':
       logger.info('In your Claude Code session, type:');
+      console.log('  ai-memex skill       - installed at .claude/skills/ai-memex');
       console.log('  /memex:help            — show all commands');
       console.log('  /memex:status          — vault overview');
-      console.log('  /memex:search "topic"  — search the wiki');
-      console.log('  /memex:inject          — load context for current task');
-      console.log('  /memex:fetch <url>     — fetch web docs');
-      console.log('  /memex:ingest          — process raw files into wiki');
-      console.log('  /memex:distill         — distill this session');
+      console.log('  /memex:capture <url>   — capture sources into raw/');
+      console.log('  /memex:ingest          — compile raw files into wiki pages');
+      console.log('  /memex:query "topic"   — answer from durable wiki knowledge');
+      console.log('  /memex:distill         — distill useful session knowledge');
+      console.log('  /memex:repair          — lint and safely repair the wiki');
       break;
     case 'opencode':
       logger.info('In your OpenCode session, type:');
@@ -460,6 +805,22 @@ function printUsageHint(agentType: string): void {
       logger.info('Ask the agent: "run memex inject for my current task"');
       break;
     case 'codex':
+      logger.info('In your Codex CLI session, restart Codex and type:');
+      console.log('  /memex:help');
+      console.log('  /memex:status');
+      console.log('  /memex:capture <url>');
+      console.log('  /memex:ingest');
+      console.log('  /memex:query "topic"');
+      console.log('  /memex:distill');
+      console.log('  Compatibility aliases if /memex:* is not listed:');
+      console.log('  /memex-help');
+      console.log('  /memex-status');
+      console.log('  /memex-capture <url>');
+      console.log('  /memex-ingest');
+      console.log('  /memex-query "topic"');
+      console.log('  /memex-distill');
+      console.log(`  prompts installed at ${codexPromptsDir()}`);
+      break;
     case 'generic':
       logger.info('The agent will now use memex commands when appropriate.');
       logger.info('You can also ask explicitly: "run memex search <topic>"');

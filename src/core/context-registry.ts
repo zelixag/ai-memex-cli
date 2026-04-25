@@ -29,6 +29,7 @@ export interface ContextEntry {
   host: string;
   mode: 'minimal' | 'digest';
   installed: string;
+  scenes?: string[];
 }
 
 interface Registry {
@@ -78,6 +79,7 @@ export async function upsertContext(entry: Omit<ContextEntry, 'installed'> & { i
     host: normalizePath(entry.host),
     mode: entry.mode,
     installed,
+    ...(entry.scenes !== undefined ? { scenes: entry.scenes } : {}),
   };
   if (existing >= 0) reg.entries[existing] = record;
   else reg.entries.push(record);

@@ -10,7 +10,7 @@
  *   memex config agents            → list all supported agents with install status
  *
  * Config keys:
- *   agent                → default agent (claude-code | codex | opencode | gemini-cli | aider | generic)
+ *   agent                → fallback agent (claude-code | codex | opencode | gemini-cli | aider | generic)
  *   search.defaultEngine → ripgrep | qmd | hybrid
  *   glob.maxPages        → number
  *   glob.mode            → copy | link
@@ -104,7 +104,7 @@ async function showAgents(): Promise<void> {
   }
 
   console.log();
-  logger.info('Set your default agent:  memex config set agent <id>');
+  logger.info('Set your fallback agent: memex config set agent <id>');
   logger.info('Use per-command:         memex ingest --agent codex');
 }
 
@@ -118,7 +118,9 @@ async function listConfig(options: ConfigCommandOptions, cwd: string): Promise<v
   console.log('\n\x1b[1mCurrent configuration:\x1b[0m\n');
 
   const rows: [string, string, string][] = [
-    ['agent', String(config.agent ?? '(auto-detect)'), 'Default AI agent for all commands'],
+    ['agent', String(config.agent ?? '(auto-detect)'), 'Fallback AI agent for delegated commands'],
+    ['agents', config.agents?.join(', ') ?? '(not set)', 'Configured AI agents'],
+    ['sessionDirs', config.sessionDirs ? Object.keys(config.sessionDirs).join(', ') : '(not set)', 'Per-agent session directories'],
     ['search.defaultEngine', config.search.defaultEngine, 'Search backend'],
     ['glob.maxPages', String(config.glob.maxPages), 'Max pages to project'],
     ['glob.mode', config.glob.mode, 'copy or symlink'],

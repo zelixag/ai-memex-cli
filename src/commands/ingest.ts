@@ -15,23 +15,30 @@
  * Examples:
  *   memex ingest                          → ingest all raw/ files
  *   memex ingest raw/personal             → ingest personal scene
- *   memex ingest .\global\raw\personal    → Windows relative path
+ *   memex ingest .\raw\personal           → Windows path under vault raw/
  *   memex ingest "notes about React"      → natural language
  *   memex ingest ~/Downloads/article.pdf  → specific file
  *   memex ingest --agent codex            → use Codex instead of default
  *   memex ingest --dry-run                → print prompt only
  */
 
-import { resolveGlobalVaultPath } from '../core/vault.js';
+import { resolveGlobalVaultPath, resolveVaultSchemaPathForRead } from '../core/vault.js';
 import { readFileUtf8, pathExists, normalizePath } from '../utils/fs.js';
 import { runCommandStreamed } from '../utils/exec.js';
 import { logger } from '../utils/logger.js';
 import { createSpinner } from '../utils/progress.js';
 import pc from 'picocolors';
 import { readConfig } from '../core/config.js';
-import { resolveAgent, buildAgentArgs, printAgentTable, AGENT_PROFILES, type AgentId } from '../core/agent-adapter.js';
+import {
+  resolveAgent,
+  prepareAgentPromptArgs,
+  printAgentTable,
+  AGENT_PROFILES,
+  VAULT_SCHEMA_MARKDOWN_FILENAMES,
+  type AgentId,
+} from '../core/agent-adapter.js';
 import type { LintReport } from './lint.js';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 export interface IngestOptions {
   /**
@@ -74,13 +81,16 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
   const agentId = agentResult?.id ?? 'claude-code';
 
   // ── Read vault schema ─────────────────────────────────────────────────────
-  const agentsPath = join(vault, 'AGENTS.md').replace(/\\/g, '/');
-  if (!(await pathExists(agentsPath))) {
-    logger.error(`No AGENTS.md found in vault: ${vault}`);
-    logger.info('Run `memex init` first.');
+  const schemaPath = await resolveVaultSchemaPathForRead(vault, config.agent ?? agentId);
+  if (!schemaPath) {
+    logger.error(
+      `No wiki schema file in vault: ${vault} (expected one of: ${VAULT_SCHEMA_MARKDOWN_FILENAMES.join(', ')})`,
+    );
+    logger.info('Run `memex init` or `memex onboard` first.');
     return;
   }
-  const agentsContent = await readFileUtf8(agentsPath);
+  const agentsContent = await readFileUtf8(schemaPath);
+  const vaultDigestFile = basename(schemaPath);
   const indexPath = join(vault, 'index.md').replace(/\\/g, '/');
   const indexContent = (await pathExists(indexPath)) ? await readFileUtf8(indexPath) : '';
 
@@ -97,13 +107,13 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
     targetHint,
     vault,
     agentId,
-    contextFile: profile.contextFile,
+    contextFile: vaultDigestFile,
     lintReport: options.lintReport,
   });
 
   if (options.dryRun) {
     logger.info(`Agent: ${profile.name} (${resolvedBin})`);
-    logger.info(`Context file: ${profile.contextFile}`);
+    logger.info(`Vault schema file: ${vaultDigestFile}`);
     logger.info(`Vault: ${vault}`);
     logger.info(`Target hint: ${targetHint}`);
     console.log('\n--- PROMPT ---\n');
@@ -116,11 +126,16 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
   logger.info(`Vault: ${vault}`);
   logger.info(`Target: ${targetHint}`);
 
-  const args = buildAgentArgs(profile, resolvedBin, prompt);
+  const prepared = prepareAgentPromptArgs(profile, resolvedBin, prompt, { taskSlug: 'ingest' });
+  if (prepared.usedPromptFile) {
+    logger.info('[ingest] prompt delivery: temp file (Windows argv limit / long prompt)');
+  }
   logger.info(`[ingest] agent  : ${profile.name} (${agentId})`);
   logger.info(`[ingest] binary : ${resolvedBin}`);
   logger.info(`[ingest] cwd    : ${vault}`);
-  logger.info(`[ingest] command: ${formatCommandLine(resolvedBin, args, prompt)}`);
+  logger.info(
+    `[ingest] command: ${formatCommandLine(resolvedBin, prepared.args, prompt.length, prepared.argvPromptValue)}`,
+  );
   logger.info(`[ingest] prompt : ${prompt.length} chars (${prompt.split(/\r?\n/).length} lines)`);
   printPromptDigest(prompt);
 
@@ -131,10 +146,9 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
 
   console.log(pc.dim('── ingest: agent output ──'));
   try {
-    const { stdout, stderr, code } = await runCommandStreamed(resolvedBin, args, {
+    const { stdout, stderr, code } = await runCommandStreamed(resolvedBin, prepared.args, {
       cwd: vault,
       onStdout: (chunk) => process.stdout.write(chunk),
-      onStderr: (chunk) => process.stderr.write(chunk),
     });
     console.log(pc.dim(`── ingest: agent done (exit ${code}, stdout=${stdout.length}B, stderr=${stderr.length}B) ──`));
     spinner.stop('Ingest complete.', 'ok');
@@ -142,6 +156,8 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
     const err = e as Error & { code?: number | null };
     console.log(pc.dim(`── ingest: agent FAILED (exit ${err.code ?? '?'}) ──`));
     spinner.stop(`Ingest failed: ${err.message}`, 'err');
+  } finally {
+    prepared.cleanup();
   }
 }
 
@@ -151,9 +167,12 @@ export async function ingestCommand(options: IngestOptions, cwd: string): Promis
  * Render the exact command line for the log, but replace the (potentially
  * enormous) prompt argument with a placeholder so the log stays readable.
  */
-function formatCommandLine(bin: string, args: string[], prompt: string): string {
-  const placeholder = `<prompt:${prompt.length}chars>`;
-  const masked = args.map((a) => (a === prompt ? placeholder : quoteArgForLog(a)));
+function formatCommandLine(bin: string, args: string[], promptChars: number, argvPrompt: string): string {
+  const placeholder =
+    argvPrompt.length < promptChars
+      ? `<prompt:${promptChars}chars,via-temp-file>`
+      : `<prompt:${promptChars}chars>`;
+  const masked = args.map((a) => (a === argvPrompt ? placeholder : quoteArgForLog(a)));
   return [quoteArgForLog(bin), ...masked].join(' ');
 }
 
@@ -218,7 +237,6 @@ interface IngestPromptOptions {
 
 function buildIngestPrompt(opts: IngestPromptOptions): string {
   const { agentsContent, indexContent, targetHint, vault, contextFile, lintReport } = opts;
-  const today = new Date().toISOString().split('T')[0];
 
   const fixSection = formatLintReportForPrompt(lintReport);
 
@@ -233,7 +251,7 @@ Ingest raw source documents into the wiki knowledge base.
 ${targetHint}
 
 Use your file search tools (Read, Glob, Grep) to find the relevant files.
-If the target is a directory path, read all \`.md\`, \`.jsonl\`, \`.json\` and \`.txt\` files inside it recursively.
+If the target is a directory path, read all source files inside it recursively, including: source code (.ts, .tsx, .js, .jsx, .vue, .py, .go, .rs, etc.), documents (.md, .mdx, .txt, .rst), configs (.json, .yaml, .yml, .toml, .xml, .env), and any other text-based files.
 If the target is a file path, read that specific file.
 If the target is a natural language description, search for matching files in ${vault}/raw/.
 
@@ -253,7 +271,7 @@ Treat each \`.md\` session file as **one source document** and:
 - If you encounter legacy raw \`.jsonl\` files (older vaults), parse them line-by-line — each line is a JSON message with \`role\` / \`content\`; skip \`tool_use\` / \`tool_result\` blocks and \`role: "system"\`.
 - Never mutate or delete session source files.
 
-## Wiki Schema (AGENTS.md)
+## Wiki Schema
 
 ${agentsContent}
 
@@ -263,45 +281,12 @@ ${indexContent || '(empty — this is a fresh vault)'}
 
 ## Instructions
 
-For each raw source file you find:
+1. Read all source files in the target.
+2. Create or update wiki pages following the schema above.
+3. Never modify or delete raw source files.
+4. After writing pages, update ${vault}/index.md and ${vault}/log.md as instructed in the schema.
 
-1. **Read** the source document carefully.
-2. **Identify** the appropriate scene (personal / research / reading / team) and page types (entity / concept / source / summary).
-3. **Create or update** wiki pages at: ${vault}/wiki/<scene>/<type>/<slug>.md
-   - Each page MUST have valid YAML frontmatter:
-     \`\`\`yaml
-     ---
-     name: <human-readable name>
-     description: <one-line summary>
-     type: entity | concept | source | summary
-     scene: personal | research | reading | team
-     tags: [tag1, tag2]
-     updated: ${today}
-     sources: [<source-url or filename>]
-     ---
-     \`\`\`
-   - Use [[page-name]] syntax for cross-references between wiki pages.
-   - Keep pages focused: one entity/concept per file.
-
-4. **Update** ${vault}/index.md — add a line for each new page:
-   \`| [[page-name]] | type | scene | one-line description |\`
-
-5. **Append** to ${vault}/log.md:
-   \`## [${today}] ingest | <source filename>\`
-
-6. **Do NOT** modify or delete any raw source files.
-
-7. **Context file**: After all pages are written, update ${vault}/${contextFile} with a concise summary of the vault's current knowledge, optimized for use as AI agent context.
-
-## Quality Standards
-
-- Prefer updating existing pages over creating duplicates.
-- Cross-reference related pages using [[wiki-links]].
-- Extract concrete facts, not vague summaries.
-- Code examples should be preserved in fenced code blocks.
-- If a source is in a language other than English, create pages in the same language.
-
-Begin now. Search for the target files and process them.`;
+Begin now.`;
 }
 
 /**

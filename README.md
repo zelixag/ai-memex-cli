@@ -2,7 +2,7 @@
 
 **English** · [简体中文](./README.zh-CN.md)
 
-> A small CLI that turns [Karpathy's LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) into a daily workflow — have your AI agent **build and maintain** a persistent Markdown knowledge base that *compounds* instead of being re-derived every session.
+> An agent-native LLM wiki workflow, powered by a CLI toolbox. Install the memex skill into your AI agent, then let the agent **build and maintain** a persistent Markdown knowledge base that *compounds* instead of being re-derived every session.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://img.shields.io/npm/v/ai-memex-cli.svg)](https://www.npmjs.com/package/ai-memex-cli)
@@ -15,22 +15,45 @@ Most RAG systems rediscover knowledge from scratch on every question — retriev
 
 This is the oldest idea in information management — Vannevar Bush's 1945 **Memex**. Bush's vision had one gap: *who does the maintenance?* LLMs fill that gap — they don't get bored updating cross-references, and they can touch 15 pages in one pass.
 
-**What this CLI is:** a set of *mechanical primitives* that make the pattern easy to live in — fetch sources, run ingest / query / lint, manage `raw/` · `wiki/` · `index.md` · `log.md` · `AGENTS.md`, distill real agent sessions back into the wiki, generate slash commands for whatever agent you use.
+**What ai-memex is:** an agent-first workflow for long-lived knowledge work. The installed `ai-memex` skill decides when to capture, ingest, query, distill, or repair knowledge. The `memex` CLI provides the reliable mechanical primitives underneath: fetch sources, search the wiki, validate links/frontmatter, initialize vaults, install agent commands/skills, and parse sessions.
 
-**What it isn't:** a RAG system, an MCP memory server, or a black-box vector store. The CLI makes **zero LLM API calls**. It stages the right files and prompts; your local agent (Claude Code, Cursor, Codex, Gemini, …) does all the thinking. The wiki itself is plain Markdown in a git repo — you can read it, edit it, diff it, blame it.
+**What it isn't:** a RAG system, an MCP memory server, or a black-box vector store. The CLI makes **zero LLM API calls**. Your local agent (Claude Code, Cursor, Codex, Gemini, …) does the semantic work through the skill. The wiki itself is plain Markdown in a git repo — you can read it, edit it, diff it, blame it.
+
+### Intellectual lineage
+
+This project is explicitly built from [Andrej Karpathy's LLM Wiki idea](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f): keep immutable raw sources, have the LLM maintain a structured Markdown wiki, and let knowledge compound through ingest, query, and lint cycles.
+
+ai-memex adds an implementation layer around that pattern:
+
+- an installable `ai-memex` agent skill
+- `/memex:*` agent workflows
+- a CLI toolbox for fetch/search/lint/status/setup
+- multi-agent installation support
+- session distillation back into raw material
 
 ---
 
 ## What `memex` gives you
 
-### Core pipeline — the Karpathy pattern, mechanized
+### Agent-first workflows
 
-1. **Ingest** — `memex fetch` drops sources into `raw/` (URLs, sitemaps, DuckDuckGo keyword search, agent-delegated fetching). `memex ingest` then hands the `raw/` tree to your agent and has it integrate new material into the wiki: updating entity / concept pages, the index, and the log in one pass.
-2. **Distill** — > *"good answers can be filed back into the wiki as new pages"* (Karpathy). `memex distill` batch-converts every agent session you've ever had into structured Markdown under `raw/<scene>/sessions/`, ready to be re-ingested. This is the mechanism that makes **explorations compound alongside reading**.
-3. **Query** — `memex search` (keyword / BM25 across the vault) and `memex inject` (pull relevant pages into an agent prompt on demand).
-4. **Lint** — `memex lint` / `memex link-check`: orphans, broken `[[wikilinks]]`, missing frontmatter, stale cross-references — the periodic health-check Karpathy describes.
-5. **Schema you own** — `AGENTS.md` is your wiki's constitution, co-evolved between you and the LLM. `memex init` gives you a working default; edit it until it fits your domain.
-6. **Slash commands, everywhere** — `memex install-hooks` generates native `/memex:*` commands for Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Aider, and Continue.dev, so you can trigger the pipeline from inside any agent chat.
+Normal use happens inside your agent:
+
+1. **Capture** — `/memex:capture` saves URLs, files, pasted text, or search results into `raw/`.
+2. **Ingest** — `/memex:ingest` has the agent compile raw material into durable entity / concept / source / summary pages.
+3. **Query** — `/memex:query` answers from your existing wiki with citations instead of re-deriving from scratch.
+4. **Distill** — `/memex:distill` turns useful debugging, planning, or research conversations into raw session material.
+5. **Repair** — `/memex:repair` runs health checks and lets the agent fix safe wiki issues without flattening contradictions.
+6. **Status** — `/memex:status` shows the current vault state and likely next step.
+
+The CLI commands still exist, but they are the toolbox the skill calls when useful:
+
+- `memex fetch`: deterministic web/source capture
+- `memex search`: local wiki search
+- `memex lint` / `memex link-check`: mechanical health checks
+- `memex init` / `memex onboard` / `memex install-hooks`: setup and installation
+- `memex distill`: mechanical session discovery/parsing
+- `memex status`: vault overview
 
 ### Advanced / experimental (not in Karpathy's original)
 
@@ -44,7 +67,7 @@ These layer on top of the core pipeline and are **off by default**. Useful, but 
 
 | Feature | ai-memex-cli | atomicmemory/llm-wiki-compiler | ussumant/llm-wiki-compiler | SamurAIGPT/llm-wiki-agent | rohitg00/agentmemory |
 |---------|--------------|--------------------------------|----------------------------|---------------------------|----------------------|
-| **Architecture** | Stateless CLI + Agent Prompts | Standalone CLI (calls LLM API) | Claude Code Plugin | Pure Markdown Prompts | TypeScript MCP Server |
+| **Architecture** | Agent skill + CLI toolbox | Standalone CLI (calls LLM API) | Claude Code Plugin | Pure Markdown Prompts | TypeScript MCP Server |
 | **Agent Support** | **Universal (8+ agents)** | Anthropic API only | Claude Code only | Claude Code only | MCP-compatible only |
 | **Web Fetching** | **Built-in crawler + Keyword search** | Single URL ingest | No | No | No |
 | **Session Distillation**| **Yes (batch, structured MD)** | No | No | No | Yes (Background) |
@@ -70,7 +93,7 @@ memex --version
 
 ### 1. Interactive Onboarding
 
-Run the onboarding wizard to select your preferred AI agent and initialize your global vault.
+Run the onboarding wizard to select your preferred AI agent, initialize your default vault, and install the agent-facing memex workflow.
 
 ```bash
 memex onboard
@@ -78,9 +101,9 @@ memex onboard
 
 The wizard will walk you through 5 steps:
 - **Step 1:** Choose your AI agent (Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Aider, Continue.dev, or Generic)
-- **Step 2:** Auto-detect your agent's session directory (e.g., `~/.claude/projects/` for Claude Code)
-- **Step 3:** Initialize the global vault at `~/.llmwiki/global/`
-- **Step 4:** Install slash commands for your chosen agent
+- **Step 2:** Record session directories for every selected agent with a known session store (Claude Code, Codex, OpenCode, Gemini CLI, Aider; custom path for others)
+- **Step 3:** Initialize your default wiki vault at `~/.llmwiki/`
+- **Step 4:** Install slash commands and, where supported, the `ai-memex` skill. You can install at project scope or user scope.
 - **Step 5:** Save configuration to `~/.llmwiki/config.json`
 
 For non-interactive environments (CI/scripts):
@@ -89,7 +112,38 @@ For non-interactive environments (CI/scripts):
 memex onboard --agent claude-code -y
 ```
 
-### 2. Fetch Knowledge
+### 2. Work From Your Agent
+
+After onboarding, use memex from inside your agent:
+
+```text
+/memex:status
+/memex:capture https://react.dev/reference/react/hooks
+/memex:ingest
+/memex:query "what do I know about React hooks tradeoffs?"
+/memex:distill this debugging session
+/memex:repair
+```
+
+For Claude Code, `memex onboard` / `memex install-hooks` installs both:
+
+```text
+.claude/commands/memex/*.md
+.claude/skills/ai-memex/
+```
+
+Project scope pins the workflow to the current repo. User scope installs it under your home agent config for use across projects:
+
+```bash
+memex install-hooks --agent claude-code --scope project
+memex install-hooks --agent claude-code --scope user
+```
+
+### 3. CLI Toolbox
+
+The commands below are still useful as deterministic primitives, especially for scripts or manual inspection.
+
+#### Fetch Knowledge
 
 Grab documentation from the web — by URL or by keyword search.
 
@@ -115,7 +169,7 @@ memex fetch "OAuth2 PKCE flow" --agent claude-code
 
 When using keyword search, the CLI searches via DuckDuckGo (no API key needed), presents results interactively, and lets you choose which pages to fetch.
 
-### 3. Ingest into Wiki
+#### Ingest into Wiki
 
 Tell your agent to process raw files into structured wiki pages.
 
@@ -136,7 +190,7 @@ memex ingest --dry-run
 
 The `ingest` command accepts **fuzzy paths** — your agent will search and resolve the actual files. You don't need to provide exact paths.
 
-### 4. Distill Your Sessions
+#### Distill Your Sessions
 
 Just finished a complex debugging session? Convert every session file your agent has ever produced into structured Markdown, ready to be ingested.
 
@@ -217,37 +271,37 @@ Target files depend on the agent (`CLAUDE.md` for Claude Code, `AGENTS.md` for C
 
 ## Architecture & Data Flow
 
-`ai-memex-cli` uses a dual-vault system: a **Global Vault** (`~/.llmwiki/global/`) for your personal, compounding knowledge, and a **Local Vault** (`.llmwiki/local/`) for project-specific context.
+`ai-memex-cli` uses a dual-vault system: a **default wiki vault** at `~/.llmwiki/` for your personal, compounding knowledge, and a **Local Vault** at `<project>/.llmwiki/local/` for project-specific context. Older installs may still use `~/.llmwiki/global/`; the CLI keeps resolving that path until you migrate.
 
 ```text
-┌─────────────────────────────────────────────────┐
-│ Layer 3: Agent (Claude Code / Cursor / Codex)   │
-│  - Reads raw docs, writes structured wiki pages │
-│  - Synthesizes concepts and fixes lint issues   │
-│  - Invokes memex commands via Bash/Slash cmds   │
-└─────────────────────────────────────────────────┘
-                       ↕ (shell + natural language prompts)
-┌─────────────────────────────────────────────────┐
-│ Layer 2: ai-memex-cli                           │
-│  - Stateless primitives: onboard / fetch /      │
-│    ingest / distill / glob / inject / lint /    │
-│    search / update / context                    │
-│  - Self-healing daemon: watch (ingest ↔ lint)   │
-│  - Handles path resolution, web crawling, and   │
-│    frontmatter validation                       │
-└─────────────────────────────────────────────────┘
-                       ↕ (fs)
-┌─────────────────────────────────────────────────┐
-│ Layer 1: Vault (filesystem)                     │
-│  ~/.llmwiki/global/    ← CLI-managed source     │
-│  <project>/.llmwiki/local/  ← agent projection  │
-└─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Layer 3: Agent Interface                           │
+│  - ai-memex skill + /memex:* workflows             │
+│  - Decides capture / ingest / query / distill      │
+│  - Writes semantic wiki updates with citations     │
+└────────────────────────────────────────────────────┘
+                         ↕ (calls CLI when useful)
+┌────────────────────────────────────────────────────┐
+│ Layer 2: CLI Toolbox                               │
+│  - Deterministic primitives: onboard / install /   │
+│    fetch / search / lint / link-check / status     │
+│  - Optional automation: distill parsing, context,  │
+│    watch                                           │
+│  - Handles paths, crawling, validation, setup      │
+└────────────────────────────────────────────────────┘
+                         ↕ (filesystem)
+┌────────────────────────────────────────────────────┐
+│ Layer 1: Vault Protocol                            │
+│  ~/.llmwiki/                ← durable wiki root    │
+│  <project>/.llmwiki/local/  ← project projection   │
+│  raw/ · wiki/ · index.md · log.md · AGENTS.md      │
+└────────────────────────────────────────────────────┘
 ```
 
 ### Vault Structure
 
 ```
-~/.llmwiki/global/
+~/.llmwiki/
 ├── AGENTS.md              # Schema + workflow rules for the agent
 ├── index.md               # Wiki index (maintained by agent during ingest)
 ├── log.md                 # Append-only action log
@@ -283,7 +337,7 @@ Two orthogonal dimensions classify every wiki page: **scene** (`personal` / `res
 
 | Command | Description |
 |---------|-------------|
-| `memex onboard` | Interactive setup wizard — select agent, detect session dir, init vault, install hooks, install L0 context block |
+| `memex onboard` | Interactive setup wizard — select agents, record each known session dir, init vault, install hooks, install L0 context block |
 | `memex fetch <url\|keywords>` | Fetch URL, crawl sitemap, or search by keywords — saves clean Markdown to `raw/` |
 | `memex ingest [target]` | Orchestrate your agent to process raw sources into structured wiki pages (accepts a lint report to drive self-healing) |
 | `memex distill [session]` | Batch-convert agent session files into structured Markdown under `raw/<scene>/sessions/` |
@@ -395,7 +449,7 @@ The installed block is delimited by `<!-- memex:context:start -->` / `<!-- memex
 ```bash
 memex config list              # Show all configuration
 memex config get agent         # Get a specific key
-memex config set agent codex   # Set default agent
+memex config set agent codex   # Set fallback agent
 memex config agents            # List all supported agents
 ```
 
@@ -433,8 +487,8 @@ If you ran `memex onboard` or `memex install-hooks`, you can trigger the CLI dir
 
 | Agent | Command Format | Files Generated |
 |-------|---------------|-----------------|
-| Claude Code | `.claude/commands/memex-*.md` | 10 slash commands |
-| Codex | `AGENTS.md` section | Embedded commands |
+| Claude Code | `.claude/commands/memex/*.md` + `.claude/skills/ai-memex/` | Slash commands + skill |
+| Codex | `~/.codex/prompts/memex/*.md` + `AGENTS.md` section + `.codex/skills/ai-memex/` | `/memex:*` custom slash prompts + skill |
 | OpenCode | `.opencode/commands/memex-*.md` | 10 slash commands |
 | Gemini CLI | `.gemini/commands/memex-*.md` | 10 slash commands |
 | Cursor | `.cursor/rules/memex.mdc` | Rule file |

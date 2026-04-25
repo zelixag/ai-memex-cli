@@ -2,7 +2,7 @@
  * prereqs.ts
  *
  * 运行命令前的前置条件检查：
- * - 必须先有一个可用的知识库（vault）目录（含 AGENTS.md）；
+ * - 必须先有一个可用的知识库（vault）目录（含 wiki schema：AGENTS.md / CLAUDE.md / …）；
  * - 语义类命令（distill / ingest 等）还必须配置好默认 AI agent。
  *
  * 未满足时友好报错并指向 `memex onboard`，避免后续命令因路径/配置缺失
@@ -29,13 +29,13 @@ export async function ensureVault(explicit: string | undefined, cwd: string): Pr
     console.log();
   }
   logger.info(`建议先执行： ${pc.cyan('memex onboard')}          ${pc.dim('# 向导式选择 agent 并初始化 vault（推荐）')}`);
-  logger.info(`或者直接执行：${pc.cyan('memex init')}             ${pc.dim('# 仅初始化全局 vault（~/.llmwiki/global）')}`);
+    logger.info(`或者直接执行：${pc.cyan('memex init')}             ${pc.dim('# 仅初始化默认 wiki vault（~/.llmwiki）')}`);
   logger.info(`指定已有路径：${pc.cyan('memex <cmd> --vault <path>')}`);
   process.exit(2);
 }
 
 /**
- * 校验是否已选择默认 agent；命令上显式传入 `--agent <name>` 视为已满足。
+ * 校验是否已选择 fallback agent；命令上显式传入 `--agent <name>` 视为已满足。
  * 未满足时打印引导并以退出码 2 终止进程。
  */
 export async function ensureAgent(explicit: string | undefined, vaultPath: string): Promise<void> {

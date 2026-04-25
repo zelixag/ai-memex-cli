@@ -147,7 +147,7 @@ This project is connected to a persistent knowledge base (LLM Wiki) managed by t
 - **Vault**: `C:/Users/Administrator/.llmwiki`
 - **Pages**: 0
 - **Updated**: 2026-04-24
-- **Agent**: claude-code
+- **Agent**: codex
 
 ### How to use memex from this session
 

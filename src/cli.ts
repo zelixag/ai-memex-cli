@@ -20,6 +20,8 @@ import { updateCommand } from './commands/update.js';
 import { contextCommand } from './commands/context.js';
 import { getPackageVersion } from './version.js';
 import { ensureVault, ensureAgent } from './core/prereqs.js';
+import { logger } from './utils/logger.js';
+import { parseCliWithFriendlyErrors } from './cli-parse-guard.js';
 
 const cli = cac('memex');
 
@@ -42,8 +44,20 @@ cli.command('onboard', 'Interactive setup wizard — choose agent, configure vau
 cli.command('init [path]', 'Initialize a vault')
   .option('--scope <scope>', 'global or local', { default: 'global' })
   .option('--scene <scene>', 'Comma-separated scenes')
+  .option(
+    '--agent <id>',
+    'For global vault: wiki schema filename (e.g. claude-code → CLAUDE.md); defaults from ~/.llmwiki/config.json',
+  )
   .action(async (path: string | undefined, options: Record<string, unknown>) => {
-    await initCommand({ scope: options.scope as 'global' | 'local', scene: options.scene as string | undefined, path }, process.cwd());
+    await initCommand(
+      {
+        scope: options.scope as 'global' | 'local',
+        scene: options.scene as string | undefined,
+        path,
+        agent: options.agent as string | undefined,
+      },
+      process.cwd(),
+    );
   });
 
 cli.command('status', 'Show vault overview')
@@ -62,7 +76,7 @@ cli.command('config [...args]', 'Manage configuration  (list | set <key> <val> |
   .option('--local', 'Write to local vault config')
   .option('--vault <vault>', 'Vault path')
   .example('memex config agents                   # list all supported agents')
-  .example('memex config set agent claude-code     # set default agent')
+  .example('memex config set agent claude-code     # set fallback agent')
   .example('memex config set agent codex')
   .example('memex config set agent opencode')
   .example('memex config set agent gemini-cli')
@@ -130,7 +144,7 @@ cli.command('distill [input]', 'Distill a session (JSONL/text) into a raw wiki d
   .option('--no-llm', 'Mechanical extraction only (requires concrete file path)')
   .option('--dry-run', 'Print prompt only')
   .option('--vault <vault>', 'Vault path')
-  .example('memex distill                                       # convert all sessions → raw/team/sessions/*.md')
+  .example('memex distill                                       # convert latest/current session → ~/.llmwiki/raw/team/sessions/*.md')
   .example('memex distill --scene personal                      # file sessions under raw/personal/sessions/')
   .example('memex distill session.jsonl')
   .example('memex distill --latest                              # auto-find latest session')
@@ -138,10 +152,6 @@ cli.command('distill [input]', 'Distill a session (JSONL/text) into a raw wiki d
   .example('memex distill .\\sessions\\today.jsonl --role backend-engineer')
   .example('memex distill --agent codex')
   .action(async (input: string | undefined, options: Record<string, unknown>) => {
-    const vault = await ensureVault(options.vault as string | undefined, process.cwd());
-    if (options.llm !== false) {
-      await ensureAgent(options.agent as string | undefined, vault);
-    }
     await distillCommand({
       input,
       out: options.out as string | undefined,
@@ -151,7 +161,7 @@ cli.command('distill [input]', 'Distill a session (JSONL/text) into a raw wiki d
       latest: options.latest as boolean | undefined,
       noLlm: !options.llm,
       dryRun: options.dryRun as boolean | undefined,
-      vault,
+      vault: options.vault as string | undefined,
     }, process.cwd());
   });
 
@@ -201,6 +211,7 @@ cli.command('ingest [target]', 'Ingest raw content into wiki pages (delegates to
 cli.command('watch', 'Watch raw/ and auto ingest → lint → ingest until clean')
   .option('--path <path>', 'Path to watch (default: <vault>/raw)')
   .option('--daemon', 'Spawn a detached background daemon')
+  .option('--deamon', 'Same as --daemon (common misspelling)')
   .option('--stop', 'Stop the running watch daemon')
   .option('--status', 'Show live daemon phase + current files + recent log tail')
   .option('-f, --follow', 'Live-tail the daemon log (like `tail -f`)')
@@ -222,7 +233,7 @@ cli.command('watch', 'Watch raw/ and auto ingest → lint → ingest until clean
   .option('--heal-interval <ms>', 'Heal-check period when --heal is on', { default: 60000 })
   .option('--no-heal-on-start', 'Skip the startup heal check (only periodic)')
   .option('--debounce <ms>', 'Debounce window after file changes', { default: 3000 })
-  .option('--ext <list>', 'Comma-separated extensions to react to', { default: 'md,jsonl,json,txt' })
+  .option('--ext <list>', 'Comma-separated extensions to react to', { default: 'md,mdx,txt,rst,ts,tsx,js,jsx,vue,svelte,css,scss,less,html,py,go,rs,java,kt,cs,rb,php,swift,json,jsonl,yaml,yml,toml,xml,env,ini,cfg,sh,bash,ps1,bat,cmd,zsh,sql,graphql,proto,dockerfile,gitignore' })
   .option('--vault <vault>', 'Vault path')
   .example('memex watch                         # foreground, file-event driven')
   .example('memex watch --daemon                # background daemon, file-event driven')
@@ -240,9 +251,14 @@ cli.command('watch', 'Watch raw/ and auto ingest → lint → ingest until clean
     if (!wantsControl) {
       await ensureAgent(options.agent as string | undefined, vault);
     }
+    if (options.deamon && !options.daemon) {
+      logger.info('已把 --deamon 当作 --daemon（正确拼写为 d-e-a-m-o-n）。');
+    }
+    const daemon =
+      Boolean(options.daemon) || Boolean(options.deamon) ? true : undefined;
     await watchCommand({
       path: options.path as string | undefined,
-      daemon: options.daemon as boolean | undefined,
+      daemon,
       stop: options.stop as boolean | undefined,
       status: options.status as boolean | undefined,
       follow: options.follow as boolean | undefined,
@@ -378,25 +394,29 @@ cli.command('inject', 'Output wiki context for agent consumption')
 
 cli.command('install-hooks', 'Install memex as slash commands in your AI agent session')
   .option('--agent <agent>', 'Agent: claude-code | codex | opencode | gemini-cli | cursor | generic', { default: 'claude-code' })
+  .option('--scope <scope>', 'Install scope: project | user', { default: 'project' })
   .option('--project <dir>', 'Project directory (default: current directory)')
   .option('--dry-run', 'Preview files without writing')
   .option('--no-context', 'Skip writing the L0 context bootstrap block')
   .option('--context-mode <mode>', 'Context block mode: minimal | digest', { default: 'digest' })
   .example('memex install-hooks                        # install slash cmds + L0 context')
+  .example('memex install-hooks --scope user           # install into user-level agent config')
   .example('memex install-hooks --agent codex          # install for Codex')
   .example('memex install-hooks --no-context           # skip L0 bootstrap block')
   .example('memex install-hooks --dry-run              # preview only')
   .action(async (options: Record<string, unknown>) => {
     const agent = options.agent as string;
+    const scope = options.scope as 'project' | 'user' | undefined;
     const projectDir = options.project as string | undefined;
     const dryRun = options.dryRun as boolean | undefined;
     await installHooksCommand({
       agent,
+      scope,
       dryRun,
       projectDir,
     }, process.cwd());
-    // L0 context bootstrap (opt-out via --no-context)
-    if (options.context !== false) {
+    // L0 context bootstrap is project-root state; skip it for user-level hook installs.
+    if (options.context !== false && scope !== 'user') {
       try {
         await contextCommand({
           subcommand: 'install',
@@ -419,15 +439,17 @@ cli.command('context [subcommand]', 'Manage L0 project-root context bootstrap bl
   .option('--project <dir>', 'Project directory (default: current directory)')
   .option('--mode <mode>', 'Content mode: minimal | digest', { default: 'digest' })
   .option('--vault <vault>', 'Vault path (default: auto-resolve)')
+  .option('--scene <scenes>', 'Wiki scenes to bind (comma-separated, e.g. component-library,architecture)')
   .option('--all', 'refresh: iterate over every registered project')
   .option('--quiet', 'suppress non-error output')
   .option('--dry-run', 'Preview only')
-  .example('memex context install                       # write block for current project+agent')
+  .example('memex context install                                    # write block for current project+agent')
+  .example('memex context install --scene component-library          # bind a wiki scene')
   .example('memex context install --agent claude-code,codex')
-  .example('memex context refresh                       # re-render block with latest wiki digest')
-  .example('memex context refresh --all                 # refresh every registered project')
-  .example('memex context uninstall                     # strip block from host file(s)')
-  .example('memex context status                        # list all registered projects')
+  .example('memex context refresh                                    # re-render block with latest wiki digest')
+  .example('memex context refresh --all                              # refresh every registered project')
+  .example('memex context uninstall                                  # strip block from host file(s)')
+  .example('memex context status                                     # list all registered projects')
   .action(async (subcommand: string | undefined, options: Record<string, unknown>) => {
     const sub = (subcommand ?? 'status') as 'install' | 'refresh' | 'uninstall' | 'status';
     if (!['install', 'refresh', 'uninstall', 'status'].includes(sub)) {
@@ -441,6 +463,7 @@ cli.command('context [subcommand]', 'Manage L0 project-root context bootstrap bl
       project: options.project as string | undefined,
       mode: options.mode as 'minimal' | 'digest' | undefined,
       vault: options.vault as string | undefined,
+      scene: options.scene as string | undefined,
       all: options.all as boolean | undefined,
       quiet: options.quiet as boolean | undefined,
       dryRun: options.dryRun as boolean | undefined,
@@ -465,4 +488,4 @@ cli.command('update', 'Update memex to the latest version')
 cli.help();
 cli.version(getPackageVersion());
 
-cli.parse();
+parseCliWithFriendlyErrors(cli);

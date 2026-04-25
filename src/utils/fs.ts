@@ -9,8 +9,8 @@ import { homedir } from 'node:os';
  * Works on Windows, macOS, and Linux.
  *
  * Examples:
- *   "~/.llmwiki/global"  → "/home/user/.llmwiki/global"
- *   "~\\.llmwiki\\global" → "C:\\Users\\user\\.llmwiki\\global"  (Windows)
+ *   "~/.llmwiki"  → "/home/user/.llmwiki"
+ *   "~\\.llmwiki" → "C:\\Users\\user\\.llmwiki"  (Windows)
  */
 export function expandHome(p: string): string {
   if (!p) return p;
@@ -50,19 +50,19 @@ export function normalizePath(p: string, cwd?: string): string {
 }
 
 /**
- * Default global vault raw directory path.
- * Cross-platform: ~/.llmwiki/global/raw
+ * Default wiki vault raw directory path (flat layout under home).
+ * Cross-platform: ~/.llmwiki/raw
  */
 export function defaultRawDir(): string {
-  return join(homedir(), '.llmwiki', 'global', 'raw').replace(/\\/g, '/');
+  return join(homedir(), '.llmwiki', 'raw').replace(/\\/g, '/');
 }
 
 /**
- * Default global vault path.
- * Cross-platform: ~/.llmwiki/global
+ * Default wiki vault root under home (flat layout).
+ * Cross-platform: ~/.llmwiki
  */
 export function defaultGlobalVault(): string {
-  return join(homedir(), '.llmwiki', 'global').replace(/\\/g, '/');
+  return join(homedir(), '.llmwiki').replace(/\\/g, '/');
 }
 
 // ── File I/O utilities ────────────────────────────────────────────────────────

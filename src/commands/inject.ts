@@ -1,10 +1,12 @@
-import { resolveVaultPath } from '../core/vault.js';
+import { resolveVaultPath, resolveVaultSchemaPathForRead } from '../core/vault.js';
 import { parseIncludes, resolveIncludePaths } from '../core/injector.js';
 import { readFileUtf8, pathExists, listMarkdownFiles } from '../utils/fs.js';
 import { buildWikiIndex } from '../core/wiki-index.js';
 import { scorePages } from '../core/globber.js';
 import { logger } from '../utils/logger.js';
-
+import { readConfig } from '../core/config.js';
+import { VAULT_SCHEMA_MARKDOWN_FILENAMES } from '../core/agent-adapter.js';
+import { basename } from 'node:path';
 
 export interface InjectOptions {
   task?: string;
@@ -16,14 +18,18 @@ export interface InjectOptions {
 
 export async function injectCommand(options: InjectOptions, cwd: string): Promise<void> {
   const vault = await resolveVaultPath({ explicitPath: options.vault }, cwd);
-  const agentsMdPath = `${vault}/AGENTS.md`;
+  const config = await readConfig(vault);
+  const schemaPath = await resolveVaultSchemaPathForRead(vault, config.agent);
 
-  if (!(await pathExists(agentsMdPath))) {
-    logger.error(`No AGENTS.md found at ${agentsMdPath}`);
+  if (!schemaPath) {
+    logger.error(
+      `No wiki schema file in vault: ${vault} (expected one of: ${VAULT_SCHEMA_MARKDOWN_FILENAMES.join(', ')})`,
+    );
     return;
   }
 
-  const agentsContent = await readFileUtf8(agentsMdPath);
+  const agentsContent = await readFileUtf8(schemaPath);
+  const schemaLabel = basename(schemaPath);
   const includes = parseIncludes(agentsContent);
   const resolved = resolveIncludePaths(includes, vault);
 
@@ -69,11 +75,12 @@ export async function injectCommand(options: InjectOptions, cwd: string): Promis
   if (options.format === 'json') {
     console.log(JSON.stringify(contents, null, 2));
   } else {
-    // Output AGENTS.md first (without @include lines)
+    // Output vault schema first (without @include lines)
     const cleanedAgents = agentsContent
       .split('\n')
       .filter(line => !line.match(/^##\s+@include\s+/))
       .join('\n');
+    console.log(`<!-- ${schemaLabel} (body only, @include lines stripped) -->\n`);
     console.log(cleanedAgents);
     console.log('\n---\n');
 

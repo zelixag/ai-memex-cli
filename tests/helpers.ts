@@ -10,7 +10,7 @@ import { join } from 'node:path';
  */
 export function createTempVault(suffix = ''): string {
   const base = join(process.cwd(), '.test-vaults', `vault-${Date.now()}${suffix}`);
-  const vaultRoot = join(base, '.llmwiki', 'global');
+  const vaultRoot = join(base, '.llmwiki');
 
   mkdirSync(join(vaultRoot, 'raw', 'research'), { recursive: true });
   mkdirSync(join(vaultRoot, 'raw', 'personal'), { recursive: true });
@@ -47,7 +47,7 @@ export function addWikiPage(
   slug: string,
   content: string
 ): string {
-  const vaultRoot = join(base, '.llmwiki', 'global');
+  const vaultRoot = join(base, '.llmwiki');
   const dir = join(vaultRoot, 'wiki', scene, `${type}s`);
   mkdirSync(dir, { recursive: true });
   const filePath = join(dir, `${slug}.md`);
@@ -64,7 +64,7 @@ export function addRawFile(
   filename: string,
   content: string
 ): string {
-  const vaultRoot = join(base, '.llmwiki', 'global');
+  const vaultRoot = join(base, '.llmwiki');
   const dir = join(vaultRoot, 'raw', scene);
   mkdirSync(dir, { recursive: true });
   const filePath = join(dir, filename);
@@ -86,10 +86,10 @@ export function cleanupTempVault(base: string): void {
 }
 
 /**
- * Get the vault root (.llmwiki/global) from a base path
+ * Get the vault root (`<base>/.llmwiki`, flat layout) from a base path
  */
 export function getVaultRoot(base: string): string {
-  return join(base, '.llmwiki', 'global');
+  return join(base, '.llmwiki');
 }
 
 /**

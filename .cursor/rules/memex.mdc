@@ -1,0 +1,25 @@
+---
+description: memex knowledge base bootstrap — index digest + command reference
+globs: ["**/*"]
+alwaysApply: true
+---
+
+## 🧠 Memex Knowledge Base
+
+This project is connected to a persistent knowledge base (LLM Wiki) managed by the `memex` CLI.
+
+- **Vault**: `C:/Users/Administrator/.llmwiki`
+- **Pages**: 0
+- **Updated**: 2026-04-24
+- **Agent**: cursor
+
+### How to use memex from this session
+
+- `memex search "<topic>"` — keyword + full-text search across the wiki
+- `memex inject --task "<current goal>"` — pull the most relevant pages for your task
+- `memex fetch <url|query>` — fetch web docs / search results into `raw/`
+- `memex distill` / `memex ingest` — convert sessions/raw into structured wiki
+- `memex watch` — auto ingest → lint → ingest loop when `raw/` changes
+- `memex --help` — full command list
+
+> 💡 **Before answering domain questions or starting non-trivial work, consult `memex inject --task "<what you are trying to do>"` to load relevant wiki pages.**

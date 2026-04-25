@@ -1,6 +1,6 @@
 {
   "name": "ai-memex-cli",
-  "version": "0.1.5",
+  "version": "0.2.0",
   "description": "CLI for building and maintaining persistent LLM wikis",
   "type": "module",
   "bin": {
@@ -20,7 +20,7 @@
     "release:dry": "node scripts/release.mjs --dry-run",
     "release:no-agent": "node scripts/release.mjs --no-agent",
     "release:changelogen": "changelogen --release --patch --publish",
-    "docs:sync": "node .claude/skills/release-ai-memex-cli/scripts/sync-gh-pages.mjs"
+    "docs:sync": "cd website && pnpm build:gh-pages"
   },
   "keywords": [
     "cli",

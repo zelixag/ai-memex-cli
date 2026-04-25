@@ -2,7 +2,7 @@
 
 [English](./README.md) · **简体中文**
 
-> 一个小型 CLI，把 [Karpathy 的 LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 变成日常工作流 —— 让你的 AI agent **构建并维护**一份持久的 Markdown 知识库，让知识**累积复利**，而不是每次会话都从零重新推导。
+> 一个 agent-native 的 LLM wiki 工作流，由 CLI 工具箱提供底层支撑。把 memex skill 安装进你的 AI agent，然后让 agent **构建并维护**一份持久的 Markdown 知识库，让知识**累积复利**，而不是每次会话都从零重新推导。
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![npm version](https://img.shields.io/npm/v/ai-memex-cli.svg)](https://www.npmjs.com/package/ai-memex-cli)
@@ -15,22 +15,45 @@
 
 这其实是信息管理领域最古老的想法 —— Vannevar Bush 在 1945 年提出的 **Memex**。Bush 的愿景有一个未解之题：*谁来做维护？* LLM 刚好填补了这个缺口 —— 它们不会在更新交叉引用时感到厌倦，而且能在一个 pass 里触达 15 个页面。
 
-**这个 CLI 是什么：** 一套让你可以"住进" Karpathy pattern 的**机械原语** —— 抓取原始资料、跑 ingest / query / lint、管理 `raw/` · `wiki/` · `index.md` · `log.md` · `AGENTS.md`，把真实的 agent 会话蒸馏回 wiki，为你在用的任何 agent 生成 slash 命令。
+**ai-memex 是什么：** 一套 agent-first 的长期知识工作流。安装后的 `ai-memex` skill 负责判断什么时候 capture、ingest、query、distill 或 repair 知识；`memex` CLI 则提供底层可靠的机械原语：抓取 source、搜索 wiki、校验 link/frontmatter、初始化 vault、安装 agent commands/skills、解析 session。
 
-**它不是什么：** 它**不是** RAG 系统、**不是** MCP memory server、**不是**黑盒向量存储。CLI 本身**不调用任何 LLM API**。它只负责把正确的文件和 prompt 编排好；真正的"思考"全部交给你本地的 agent（Claude Code、Cursor、Codex、Gemini……）。wiki 本身就是 git 仓库里的纯 Markdown —— 你可以读、可以改、可以 diff、可以 blame。
+**它不是什么：** 它**不是** RAG 系统、**不是** MCP memory server、**不是**黑盒向量存储。CLI 本身**不调用任何 LLM API**。真正的语义工作由你本地的 agent（Claude Code、Cursor、Codex、Gemini……）通过 skill 完成。wiki 本身就是 git 仓库里的纯 Markdown —— 你可以读、可以改、可以 diff、可以 blame。
+
+### 思想来源
+
+这个项目明确建立在 [Andrej Karpathy 的 LLM Wiki 思想](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f) 之上：保留不可变的 raw sources，让 LLM 维护结构化 Markdown wiki，并通过 ingest、query、lint 循环让知识持续复利。
+
+ai-memex 在这个 pattern 外面补了一层工程化实现：
+
+- 可安装的 `ai-memex` agent skill
+- `/memex:*` agent 工作流
+- 用于 fetch/search/lint/status/setup 的 CLI 工具箱
+- 多 agent 安装支持
+- 把 session 蒸馏回 raw material 的机制
 
 ---
 
 ## `memex` 能给你什么
 
-### 核心管线 —— Karpathy pattern 的机械化
+### Agent-first 工作流
 
-1. **Ingest（导入）** —— `memex fetch` 把资料抓进 `raw/`（URL、sitemap、DuckDuckGo 关键词搜索、agent 代抓）。`memex ingest` 再把 `raw/` 整颗树交给你的 agent，让它把新材料整合进 wiki：一次性更新 entity / concept 页面、index 和 log。
-2. **Distill（蒸馏）** —— > *"好的回答应该被归档回 wiki 作为新页面"*（Karpathy）。`memex distill` 把你用过的**所有** agent 会话批量转换成结构化 Markdown，落到 `raw/<scene>/sessions/`，等待被再次 ingest。这是让**探索随阅读一起累积复利**的关键机制。
-3. **Query（查询）** —— `memex search`（在整个 vault 里做关键词 / BM25 搜索）和 `memex inject`（按需把相关页面拉进 agent prompt）。
-4. **Lint（自检）** —— `memex lint` / `memex link-check`：孤儿页、断裂的 `[[wikilink]]`、缺失的 frontmatter、过时的交叉引用 —— Karpathy 原文里描述的周期性健康检查。
-5. **你拥有的 schema** —— `AGENTS.md` 是 wiki 的"宪法"，由你和 LLM 协同演化而成。`memex init` 给你一份可以直接用的默认版本；去按你的领域改它。
-6. **slash 命令，随处可用** —— `memex install-hooks` 为 Claude Code、Codex、OpenCode、Cursor、Gemini CLI、Aider、Continue.dev 生成原生的 `/memex:*` 命令，让你在任何 agent 聊天界面里都能触发整条管线。
+日常使用发生在 agent 里：
+
+1. **Capture（捕获）** —— `/memex:capture` 把 URL、文件、粘贴文本或搜索结果保存到 `raw/`。
+2. **Ingest（导入）** —— `/memex:ingest` 让 agent 把 raw material 编译成可持久维护的 entity / concept / source / summary 页面。
+3. **Query（查询）** —— `/memex:query` 从已有 wiki 中带 citation 回答，而不是每次从零重新推导。
+4. **Distill（蒸馏）** —— `/memex:distill` 把有价值的 debug、planning 或 research 对话变成 raw session material。
+5. **Repair（修复）** —— `/memex:repair` 运行健康检查，让 agent 修复安全的 wiki 问题，同时保留矛盾和来源。
+6. **Status（状态）** —— `/memex:status` 展示当前 vault 状态和可能的下一步。
+
+CLI 命令仍然存在，但它们是 skill 在需要时调用的工具箱：
+
+- `memex fetch`：确定性的网页/source 抓取
+- `memex search`：本地 wiki 搜索
+- `memex lint` / `memex link-check`：机械健康检查
+- `memex init` / `memex onboard` / `memex install-hooks`：初始化和安装
+- `memex distill`：机械 session discovery/parsing
+- `memex status`：vault 概览
 
 ### 进阶 / 实验特性（不在 Karpathy 原版里）
 
@@ -44,7 +67,7 @@
 
 | 特性 | ai-memex-cli | atomicmemory/llm-wiki-compiler | ussumant/llm-wiki-compiler | SamurAIGPT/llm-wiki-agent | rohitg00/agentmemory |
 |------|--------------|--------------------------------|----------------------------|---------------------------|----------------------|
-| **架构** | 无状态 CLI + Agent Prompt | 独立 CLI（直接调 LLM API） | Claude Code 插件 | 纯 Markdown Prompt | TypeScript MCP Server |
+| **架构** | Agent skill + CLI 工具箱 | 独立 CLI（直接调 LLM API） | Claude Code 插件 | 纯 Markdown Prompt | TypeScript MCP Server |
 | **Agent 支持** | **通用（8+ 个 agent）** | 仅 Anthropic API | 仅 Claude Code | 仅 Claude Code | 仅 MCP 兼容 |
 | **网页抓取** | **内置爬虫 + 关键词搜索** | 单 URL 导入 | 无 | 无 | 无 |
 | **会话蒸馏** | **支持（批量、结构化 MD）** | 无 | 无 | 无 | 支持（后台） |
@@ -70,7 +93,7 @@ memex --version
 
 ### 1. 交互式引导
 
-运行引导向导，选择你的 AI agent 并初始化 global vault。
+运行引导向导，选择你的 AI agent，初始化默认 vault，并安装面向 agent 的 memex 工作流。
 
 ```bash
 memex onboard
@@ -78,9 +101,9 @@ memex onboard
 
 向导会走完 5 步：
 - **Step 1：** 选择 AI agent（Claude Code、Codex、OpenCode、Cursor、Gemini CLI、Aider、Continue.dev、或 Generic）
-- **Step 2：** 自动探测 agent 的会话目录（例如 Claude Code 的 `~/.claude/projects/`）
-- **Step 3：** 在 `~/.llmwiki/global/` 初始化 global vault
-- **Step 4：** 为选定的 agent 安装 slash 命令
+- **Step 2：** 为每个已选 agent 记录对应的会话目录（Claude Code、Codex、OpenCode、Gemini CLI、Aider 会自动带出默认目录；其他 agent 可填自定义路径）
+- **Step 3：** 在 `~/.llmwiki/` 初始化默认 wiki vault
+- **Step 4：** 为选定的 agent 安装 slash 命令；在支持的 agent 上同时安装 `ai-memex` skill。你可以选择项目级安装或用户级安装。
 - **Step 5：** 将配置保存到 `~/.llmwiki/config.json`
 
 非交互环境（CI / 脚本）：
@@ -89,7 +112,38 @@ memex onboard
 memex onboard --agent claude-code -y
 ```
 
-### 2. 抓取知识
+### 2. 在 agent 里使用
+
+完成 onboarding 后，从 agent 内使用 memex：
+
+```text
+/memex:status
+/memex:capture https://react.dev/reference/react/hooks
+/memex:ingest
+/memex:query "我关于 React hooks tradeoffs 知道什么？"
+/memex:distill this debugging session
+/memex:repair
+```
+
+对 Claude Code 来说，`memex onboard` / `memex install-hooks` 会同时安装：
+
+```text
+.claude/commands/memex/*.md
+.claude/skills/ai-memex/
+```
+
+项目级安装会把 workflow 固定到当前 repo；用户级安装会写入 home 目录下的 agent 配置，方便跨项目使用：
+
+```bash
+memex install-hooks --agent claude-code --scope project
+memex install-hooks --agent claude-code --scope user
+```
+
+### 3. CLI 工具箱
+
+下面这些命令仍然适合作为确定性 primitives，尤其适合脚本或手动检查。
+
+#### 抓取知识
 
 从网络上抓取文档 —— 按 URL 或按关键词。
 
@@ -115,7 +169,7 @@ memex fetch "OAuth2 PKCE flow" --agent claude-code
 
 关键词搜索走 DuckDuckGo（无需 API Key），交互式列出候选，由你决定抓取哪些页面。
 
-### 3. 导入进 wiki
+#### 导入进 wiki
 
 让你的 agent 把 `raw/` 下的原始文件处理成结构化的 wiki 页面。
 
@@ -136,7 +190,7 @@ memex ingest --dry-run
 
 `ingest` 接受**模糊路径** —— agent 会自己搜索并解析实际文件，你不必给精确路径。
 
-### 4. 蒸馏会话
+#### 蒸馏会话
 
 刚结束一次复杂的 debug 会话？把你的 agent 生成过的**所有** session 文件批量转换成结构化 Markdown，立即可以被 ingest。
 
@@ -223,36 +277,36 @@ memex context uninstall
 
 ## 架构与数据流
 
-`ai-memex-cli` 采用双 vault 体系：**Global Vault**（`~/.llmwiki/global/`）保存你跨项目累积的个人知识，**Local Vault**（`.llmwiki/local/`）承载项目级的局部上下文。
+`ai-memex-cli` 采用双 vault 体系：**默认 wiki**（`~/.llmwiki/`）保存你跨项目累积的个人知识，**Local Vault**（`<项目>/.llmwiki/local/`）承载项目级的局部上下文。旧版目录 `~/.llmwiki/global/` 仍会被识别，直到你完成迁移。
 
 ```text
-┌─────────────────────────────────────────────────┐
-│ Layer 3: Agent（Claude Code / Cursor / Codex）  │
-│  - 读 raw 文档、写结构化 wiki 页面              │
-│  - 综合概念、修复 lint 问题                     │
-│  - 通过 Bash / Slash 命令调用 memex             │
-└─────────────────────────────────────────────────┘
-                       ↕（shell + 自然语言 prompt）
-┌─────────────────────────────────────────────────┐
-│ Layer 2: ai-memex-cli                           │
-│  - 无状态原语：onboard / fetch /                │
-│    ingest / distill / glob / inject / lint /    │
-│    search / update / context                    │
-│  - 自愈守护：watch（ingest ↔ lint）             │
-│  - 负责路径解析、网页爬取、frontmatter 校验     │
-└─────────────────────────────────────────────────┘
-                       ↕（fs）
-┌─────────────────────────────────────────────────┐
-│ Layer 1: Vault（文件系统）                      │
-│  ~/.llmwiki/global/    ← CLI 管理的源           │
-│  <project>/.llmwiki/local/  ← agent 的投影      │
-└─────────────────────────────────────────────────┘
+┌────────────────────────────────────────────────────┐
+│ Layer 3: Agent Interface                           │
+│  - ai-memex skill + /memex:* workflows             │
+│  - 判断 capture / ingest / query / distill         │
+│  - 带 citation 写入语义 wiki 更新                  │
+└────────────────────────────────────────────────────┘
+                         ↕（需要时调用 CLI）
+┌────────────────────────────────────────────────────┐
+│ Layer 2: CLI Toolbox                               │
+│  - 确定性原语：onboard / install /                 │
+│    fetch / search / lint / link-check / status     │
+│  - 可选自动化：distill parsing、context、watch      │
+│  - 负责路径、抓取、校验、安装                      │
+└────────────────────────────────────────────────────┘
+                         ↕（文件系统）
+┌────────────────────────────────────────────────────┐
+│ Layer 1: Vault Protocol                            │
+│  ~/.llmwiki/                ← 持久 wiki 根目录     │
+│  <project>/.llmwiki/local/  ← 项目级投影           │
+│  raw/ · wiki/ · index.md · log.md · AGENTS.md      │
+└────────────────────────────────────────────────────┘
 ```
 
 ### Vault 目录结构
 
 ```
-~/.llmwiki/global/
+~/.llmwiki/
 ├── AGENTS.md              # 给 agent 的 schema 与工作流规则
 ├── index.md               # wiki 索引（ingest 时由 agent 维护）
 ├── log.md                 # 只增不减的动作日志
@@ -288,7 +342,7 @@ memex context uninstall
 
 | 命令 | 说明 |
 |------|------|
-| `memex onboard` | 交互式设置向导 —— 选 agent、探测 session 目录、初始化 vault、安装 hook、安装 L0 上下文区块 |
+| `memex onboard` | 交互式设置向导 —— 多选 agent、记录各自 session 目录、初始化 vault、安装 hook、安装 L0 上下文区块 |
 | `memex fetch <url\|关键词>` | 抓 URL、爬 sitemap、或按关键词搜索 —— 干净 Markdown 落到 `raw/` |
 | `memex ingest [target]` | 编排 agent 把 raw 源处理成结构化 wiki 页（可接受 lint 报告驱动自愈） |
 | `memex distill [session]` | 批量把 agent 会话文件转换成结构化 Markdown，落到 `raw/<scene>/sessions/` |
@@ -400,7 +454,7 @@ memex context status                   # 列出所有已注册项目 + 存活检
 ```bash
 memex config list              # 显示全部配置
 memex config get agent         # 读取某个 key
-memex config set agent codex   # 设置默认 agent
+memex config set agent codex   # 设置 fallback agent
 memex config agents            # 列出所有支持的 agent
 ```
 
@@ -438,8 +492,8 @@ memex update --source npm      # 强制从 npm 更新
 
 | Agent | 命令格式 | 生成文件 |
 |-------|----------|----------|
-| Claude Code | `.claude/commands/memex-*.md` | 10 个 slash 命令 |
-| Codex | `AGENTS.md` 章节 | 嵌入式命令 |
+| Claude Code | `.claude/commands/memex/*.md` + `.claude/skills/ai-memex/` | Slash commands + skill |
+| Codex | `~/.codex/prompts/memex/*.md` + `AGENTS.md` 章节 + `.codex/skills/ai-memex/` | `/memex:*` 自定义 slash prompt + skill |
 | OpenCode | `.opencode/commands/memex-*.md` | 10 个 slash 命令 |
 | Gemini CLI | `.gemini/commands/memex-*.md` | 10 个 slash 命令 |
 | Cursor | `.cursor/rules/memex.mdc` | 规则文件 |

@@ -36,6 +36,7 @@ import {
   listContexts,
   registryPath,
 } from '../core/context-registry.js';
+import { readAllSceneManifests } from '../core/scene-manifest.js';
 import { AGENT_PROFILES, type AgentId } from '../core/agent-adapter.js';
 
 export interface ContextCommandOptions {
@@ -47,6 +48,7 @@ export interface ContextCommandOptions {
   all?: boolean;
   quiet?: boolean;
   dryRun?: boolean;
+  scene?: string;
 }
 
 export async function contextCommand(options: ContextCommandOptions, cwd: string): Promise<void> {
@@ -91,7 +93,20 @@ async function doInstall(
   }
 
   const mode: ContextMode = options.mode ?? 'digest';
-  const pages = (await buildWikiIndex(join(vault, 'wiki').replace(/\\/g, '/'))).pages;
+  const wikiDir = join(vault, 'wiki').replace(/\\/g, '/');
+  const pages = (await buildWikiIndex(wikiDir)).pages;
+
+  // Resolve scenes: from --scene flag, or carry over from existing registry entry
+  const existingEntries = await listContexts();
+  const existingScenes = existingEntries.find(
+    e => normalizePath(e.project) === normalizePath(projectDir)
+  )?.scenes ?? [];
+  const sceneNames = options.scene
+    ? options.scene.split(',').map(s => s.trim()).filter(Boolean)
+    : existingScenes;
+  const sceneManifests = sceneNames.length > 0
+    ? await readAllSceneManifests(wikiDir, sceneNames)
+    : undefined;
 
   let installed = 0;
   let skipped = 0;
@@ -106,8 +121,8 @@ async function doInstall(
     }
 
     const payload = isCursorAgent(agentId)
-      ? renderCursorRule({ vault, pages, mode, agentId })
-      : renderMarkdownBlock({ vault, pages, mode, agentId });
+      ? renderCursorRule({ vault, pages, mode, agentId, scenes: sceneManifests })
+      : renderMarkdownBlock({ vault, pages, mode, agentId, scenes: sceneManifests });
 
     if (options.dryRun) {
       console.log();
@@ -135,11 +150,13 @@ async function doInstall(
       agent: agentId,
       host,
       mode,
+      scenes: sceneNames.length > 0 ? sceneNames : undefined,
     });
 
     installed++;
     if (!options.quiet) {
-      logger.success(`${asRefresh ? 'Refreshed' : 'Installed'} ${host}  ${pc.dim(`(${agentId}, ${pages.length} pages)`)}`);
+      const sceneLabel = sceneNames.length > 0 ? `, scenes: ${sceneNames.join(',')}` : '';
+      logger.success(`${asRefresh ? 'Refreshed' : 'Installed'} ${host}  ${pc.dim(`(${agentId}, ${pages.length} pages${sceneLabel})`)}`);
     }
   }
 
@@ -171,15 +188,19 @@ async function doRefreshAll(options: ContextCommandOptions, cwd: string): Promis
     return;
   }
 
-  const pages = (await buildWikiIndex(join(vault, 'wiki').replace(/\\/g, '/'))).pages;
+  const wikiDir = join(vault, 'wiki').replace(/\\/g, '/');
+  const pages = (await buildWikiIndex(wikiDir)).pages;
 
   let ok = 0;
   let fail = 0;
   for (const e of entries) {
     try {
+      const entryScenes = e.scenes && e.scenes.length > 0
+        ? await readAllSceneManifests(wikiDir, e.scenes)
+        : undefined;
       const payload = isCursorAgent(e.agent)
-        ? renderCursorRule({ vault, pages, mode: e.mode, agentId: e.agent })
-        : renderMarkdownBlock({ vault, pages, mode: e.mode, agentId: e.agent });
+        ? renderCursorRule({ vault, pages, mode: e.mode, agentId: e.agent, scenes: entryScenes })
+        : renderMarkdownBlock({ vault, pages, mode: e.mode, agentId: e.agent, scenes: entryScenes });
 
       if (isCursorAgent(e.agent)) {
         await writeFileUtf8(e.host, payload);
@@ -290,6 +311,7 @@ async function resolveAgents(explicit: string | undefined, vault: string): Promi
   }
   try {
     const cfg = await readConfig(vault);
+    if (cfg.agents?.length) return cfg.agents;
     if (cfg.agent) return [cfg.agent];
   } catch {
     /* empty */

@@ -41,7 +41,7 @@ import { writeFileUtf8, normalizePath } from '../utils/fs.js';
 import { runCommand, commandExists } from '../utils/exec.js';
 import { createProgressBar, createSpinner } from '../utils/progress.js';
 import { logger } from '../utils/logger.js';
-import { resolveAgent, buildAgentArgs, type AgentId } from '../core/agent-adapter.js';
+import { resolveAgent, prepareAgentPromptArgs, type AgentId } from '../core/agent-adapter.js';
 import { readConfig } from '../core/config.js';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -349,17 +349,21 @@ async function runAgentSearch(
   logger.info(`  Query: "${query}"`);
   logger.info(`  Top ${topN} results → ${rawDir}/`);
 
-  const args = buildAgentArgs(resolved.profile, resolved.resolvedBin, prompt);
+  const prepared = prepareAgentPromptArgs(resolved.profile, resolved.resolvedBin, prompt, {
+    taskSlug: 'fetch-search',
+  });
   const spinner = createSpinner(`正在调用 ${resolved.profile.name} 搜索并抓取…`);
 
   try {
-    const { stdout, stderr } = await runCommand(resolved.resolvedBin, args, { cwd });
+    const { stdout, stderr } = await runCommand(resolved.resolvedBin, prepared.args, { cwd });
     spinner.stop(`Agent search + fetch complete. Check ${rawDir}/ for results.`, 'ok');
     if (stdout) process.stdout.write(stdout);
     if (stderr) process.stderr.write(stderr);
     logger.info('Next: run `memex ingest` to process into wiki pages.');
   } catch (e) {
     spinner.stop(`Agent failed: ${e instanceof Error ? e.message : String(e)}`, 'err');
+  } finally {
+    prepared.cleanup();
   }
 }
 
@@ -393,17 +397,21 @@ async function runAgentFetch(
     return;
   }
 
-  const args = buildAgentArgs(resolved.profile, resolved.resolvedBin, prompt);
+  const prepared = prepareAgentPromptArgs(resolved.profile, resolved.resolvedBin, prompt, {
+    taskSlug: 'fetch-url',
+  });
   const spinner = createSpinner(`正在调用 ${resolved.profile.name} 抓取…`);
 
   try {
-    const { stdout, stderr } = await runCommand(resolved.resolvedBin, args, { cwd });
+    const { stdout, stderr } = await runCommand(resolved.resolvedBin, prepared.args, { cwd });
     spinner.stop(`Agent fetch complete. Check ${rawDir}/ for results.`, 'ok');
     if (stdout) process.stdout.write(stdout);
     if (stderr) process.stderr.write(stderr);
     logger.info('Next: run `memex ingest` to process into wiki pages.');
   } catch (e) {
     spinner.stop(`Agent fetch failed: ${e instanceof Error ? e.message : String(e)}`, 'err');
+  } finally {
+    prepared.cleanup();
   }
 }
 

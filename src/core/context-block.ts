@@ -14,6 +14,7 @@
  */
 import { join } from 'node:path';
 import type { WikiPage } from './wiki-index.js';
+import type { SceneManifest } from './scene-manifest.js';
 
 export type ContextMode = 'minimal' | 'digest';
 
@@ -27,6 +28,8 @@ export interface ContextBuildInput {
   /** number of pages per scene to list in digest mode */
   topPerScene?: number;
   agentId: string;
+  /** bound scene manifests — drives the "when to use" section */
+  scenes?: SceneManifest[];
 }
 
 /** Build the inner markdown body of the context block (no start/end markers). */
@@ -50,6 +53,31 @@ export function buildContextBody(input: ContextBuildInput): string {
     '',
   ];
 
+  // Scene-driven "when to use" section (shown when scenes are bound)
+  const scenesSection: string[] = [];
+  if (input.scenes && input.scenes.length > 0) {
+    scenesSection.push('### When to consult the knowledge base');
+    scenesSection.push('');
+    for (const scene of input.scenes) {
+      const wikiPath = `${vault}/wiki/${scene.name}/`;
+      const heading = scene.description
+        ? `**${scene.name}** — ${scene.description}`
+        : `**${scene.name}**`;
+      scenesSection.push(heading);
+      if (scene.triggers.length > 0) {
+        scenesSection.push(`Read \`${wikiPath}\` when:`);
+        for (const t of scene.triggers) {
+          scenesSection.push(`- ${t}`);
+        }
+      } else {
+        scenesSection.push(`Path: \`${wikiPath}\``);
+      }
+      scenesSection.push('');
+    }
+    scenesSection.push('> Read the relevant file from the path above. No extra CLI commands needed.');
+    scenesSection.push('');
+  }
+
   const digest: string[] = [];
   if (mode === 'digest' && pages.length > 0) {
     digest.push('### Index digest');
@@ -69,21 +97,30 @@ export function buildContextBody(input: ContextBuildInput): string {
     }
   }
 
-  const usage = [
-    '### How to use memex from this session',
-    '',
-    '- `memex search "<topic>"` — keyword + full-text search across the wiki',
-    '- `memex inject --task "<current goal>"` — pull the most relevant pages for your task',
-    '- `memex fetch <url|query>` — fetch web docs / search results into `raw/`',
-    '- `memex distill` / `memex ingest` — convert sessions/raw into structured wiki',
-    '- `memex watch` — auto ingest → lint → ingest loop when `raw/` changes',
-    '- `memex --help` — full command list',
-    '',
-    '> 💡 **Before answering domain questions or starting non-trivial work, consult ' +
-      '`memex inject --task "<what you are trying to do>"` to load relevant wiki pages.**',
-  ];
+  const hasBoundScenes = input.scenes && input.scenes.length > 0;
+  const usage = hasBoundScenes
+    ? [
+        '### memex CLI',
+        '',
+        '- `memex search "<topic>"` — keyword search across the wiki',
+        '- `memex context refresh` — sync latest wiki updates to this block',
+        '- `memex --help` — full command list',
+      ]
+    : [
+        '### How to use memex from this session',
+        '',
+        '- `memex search "<topic>"` — keyword + full-text search across the wiki',
+        '- `memex inject --task "<current goal>"` — pull the most relevant pages for your task',
+        '- `memex fetch <url|query>` — fetch web docs / search results into `raw/`',
+        '- `memex distill` / `memex ingest` — convert sessions/raw into structured wiki',
+        '- `memex watch` — auto ingest → lint → ingest loop when `raw/` changes',
+        '- `memex --help` — full command list',
+        '',
+        '> 💡 **Before answering domain questions or starting non-trivial work, consult ' +
+          '`memex inject --task "<what you are trying to do>"` to load relevant wiki pages.**',
+      ];
 
-  return [...header, ...digest, ...usage].join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
+  return [...header, ...scenesSection, ...digest, ...usage].join('\n').replace(/\n{3,}/g, '\n\n').trimEnd() + '\n';
 }
 
 /** Render the full block (with markers) for a markdown host file. */

@@ -1,6 +1,12 @@
 import { pathExists, normalizePath } from '../utils/fs.js';
 import { join, resolve, dirname, basename } from 'node:path';
 import { homedir } from 'node:os';
+import {
+  VAULT_SCHEMA_MARKDOWN_FILENAMES,
+  vaultSchemaFilenameForAgent,
+  isKnownAgentId,
+  type AgentId,
+} from './agent-adapter.js';
 
 export interface VaultOptions {
   explicitPath?: string;
@@ -9,10 +15,10 @@ export interface VaultOptions {
 /**
  * Resolve the vault path in priority order:
  * 1. Explicit --vault argument (expands ~ and normalizes separators)
- * 2. Detect if cwd is INSIDE a vault (cwd contains AGENTS.md, or parent does)
- * 3. Walk upward from cwd looking for .llmwiki/local
- * 4. Walk upward from cwd looking for .llmwiki/global
- * 5. Fallback: ~/.llmwiki/global
+ * 2. Walk upward from cwd looking for .llmwiki/local
+ * 3. Walk upward: legacy `.llmwiki/global` or flat `.llmwiki` with a schema markdown file
+ * 4. Detect if cwd is INSIDE a vault (wiki schema md at root, or parent does)
+ * 5. Fallback: `~/.llmwiki` (or `~/.llmwiki/global` when that legacy vault still exists)
  */
 export async function resolveVaultPath(options: VaultOptions, cwd: string): Promise<string> {
   // 1. Explicit path
@@ -20,20 +26,20 @@ export async function resolveVaultPath(options: VaultOptions, cwd: string): Prom
     return normalizePath(options.explicitPath, cwd);
   }
 
-  // 2. Check if cwd is inside a vault (e.g., user is in .llmwiki/global or .llmwiki/global/raw/personal)
-  const vaultFromCwd = await findVaultContaining(cwd);
-  if (vaultFromCwd) return vaultFromCwd;
-
-  // 3. Walk upward looking for .llmwiki/local
+  // 2. Walk upward looking for .llmwiki/local
   const localVault = await findUpward(cwd, '.llmwiki/local');
   if (localVault) return localVault;
 
-  // 4. Walk upward looking for .llmwiki/global
-  const globalVault = await findUpward(cwd, '.llmwiki/global');
-  if (globalVault) return globalVault;
+  // 3. Walk upward: legacy `.../.llmwiki/global` or flat `.../.llmwiki` wiki root
+  const globalStyleVault = await findUpwardGlobalStyleVault(cwd);
+  if (globalStyleVault) return globalStyleVault;
 
-  // 5. Fallback to home directory
-  return join(homedir(), '.llmwiki', 'global').replace(/\\/g, '/');
+  // 4. Check if cwd is inside a vault (e.g. under `.llmwiki/`, legacy `.llmwiki/global/`, or `.llmwiki/local/`)
+  const vaultFromCwd = await findVaultContaining(cwd);
+  if (vaultFromCwd) return vaultFromCwd;
+
+  // 5. Fallback under home (prefers legacy path if that vault already exists)
+  return defaultHomeWikiVaultPath();
 }
 
 /**
@@ -45,49 +51,35 @@ export async function resolveGlobalVaultPath(options: VaultOptions, cwd: string)
     return normalizePath(options.explicitPath, cwd);
   }
 
-  // Check if cwd is inside a vault
-  const vaultFromCwd = await findVaultContaining(cwd);
-  if (vaultFromCwd) return vaultFromCwd;
-
-  const globalVault = await findUpward(cwd, '.llmwiki/global');
-  if (globalVault) return globalVault;
-
-  return join(homedir(), '.llmwiki', 'global').replace(/\\/g, '/');
+  return defaultHomeWikiVaultPath();
 }
 
 /**
  * Given a path (which may be inside a vault), walk UP until we find a directory
- * that contains AGENTS.md — that's the vault root.
- *
- * This handles cases like:
- *   cwd = C:\Users\..\.llmwiki\global          → vault = same dir
- *   cwd = C:\Users\..\.llmwiki\global\raw      → vault = parent
- *   cwd = C:\Users\..\.llmwiki\global\raw\personal → vault = grandparent
- *   cwd = C:\Users\..\.llmwiki                 → vault = global subdir
+ * that contains a wiki schema markdown file — that's the vault root.
  */
 async function findVaultContaining(startPath: string): Promise<string | null> {
   const normalized = resolve(startPath).replace(/\\/g, '/');
 
-  // Walk upward from startPath, check each dir for AGENTS.md
   let current = normalized;
   let depth = 0;
   const MAX_DEPTH = 8; // don't walk too far up
 
   while (depth < MAX_DEPTH) {
-    const agentsPath = join(current, 'AGENTS.md').replace(/\\/g, '/');
-    if (await pathExists(agentsPath)) {
-      return current;
-    }
-
-    // Special case: if current dir is named ".llmwiki", check if global/ or local/ subdir has AGENTS.md
     if (basename(current) === '.llmwiki') {
-      for (const sub of ['global', 'local']) {
+      for (const sub of ['local', 'global']) {
         const subVault = join(current, sub).replace(/\\/g, '/');
-        const subAgents = join(subVault, 'AGENTS.md').replace(/\\/g, '/');
-        if (await pathExists(subAgents)) {
+        if ((await findExistingVaultSchemaFile(subVault)) !== null) {
           return subVault;
         }
       }
+      if ((await findExistingVaultSchemaFile(current)) !== null) {
+        return current;
+      }
+    }
+
+    if ((await findExistingVaultSchemaFile(current)) !== null) {
+      return current;
     }
 
     const parent = dirname(current).replace(/\\/g, '/');
@@ -100,8 +92,38 @@ async function findVaultContaining(startPath: string): Promise<string | null> {
 }
 
 /**
+ * Default wiki vault directory under the user home.
+ * If a legacy `~/.llmwiki/global/` vault exists, keep using it; otherwise `~/.llmwiki/`.
+ */
+export async function defaultHomeWikiVaultPath(): Promise<string> {
+  const h = homedir().replace(/\\/g, '/');
+  const legacy = `${h}/.llmwiki/global`;
+  if ((await findExistingVaultSchemaFile(legacy)) !== null) return legacy;
+  return `${h}/.llmwiki`;
+}
+
+/**
+ * Walk upward from startDir; first match wins:
+ * - `<ancestor>/.llmwiki/global` (legacy) with a schema markdown file
+ * - `<ancestor>/.llmwiki` (flat) with a schema markdown file at that directory
+ */
+async function findUpwardGlobalStyleVault(startDir: string): Promise<string | null> {
+  let current = resolve(startDir).replace(/\\/g, '/');
+  while (true) {
+    const legacy = join(current, '.llmwiki', 'global').replace(/\\/g, '/');
+    if ((await findExistingVaultSchemaFile(legacy)) !== null) return legacy;
+    const flat = join(current, '.llmwiki').replace(/\\/g, '/');
+    if ((await findExistingVaultSchemaFile(flat)) !== null) return flat;
+    const parent = dirname(current).replace(/\\/g, '/');
+    if (parent === current) break;
+    current = parent;
+  }
+  return null;
+}
+
+/**
  * Walk upward from startDir looking for a subdirectory named `target`.
- * e.g., findUpward('/home/user/project', '.llmwiki/global')
+ * e.g. findUpward('/home/user/project', '.llmwiki/local')
  */
 async function findUpward(startDir: string, target: string): Promise<string | null> {
   let current = resolve(startDir).replace(/\\/g, '/');
@@ -118,9 +140,33 @@ async function findUpward(startDir: string, target: string): Promise<string | nu
   return null;
 }
 
+/** True if `vaultPath` contains a recognized wiki schema markdown file. */
+export async function findExistingVaultSchemaFile(vaultPath: string): Promise<string | null> {
+  for (const name of VAULT_SCHEMA_MARKDOWN_FILENAMES) {
+    const p = join(vaultPath, name).replace(/\\/g, '/');
+    if (await pathExists(p)) return p;
+  }
+  return null;
+}
+
 /**
- * Check if a path looks like a valid vault (has AGENTS.md).
+ * Pick which schema file to read: preferred agent basename first, then any
+ * known schema file in the vault.
+ */
+export async function resolveVaultSchemaPathForRead(
+  vaultPath: string,
+  preferredAgent?: string
+): Promise<string | null> {
+  if (preferredAgent && isKnownAgentId(preferredAgent)) {
+    const p = join(vaultPath, vaultSchemaFilenameForAgent(preferredAgent as AgentId)).replace(/\\/g, '/');
+    if (await pathExists(p)) return p;
+  }
+  return findExistingVaultSchemaFile(vaultPath);
+}
+
+/**
+ * Check if a path looks like a valid vault (has a wiki schema markdown file).
  */
 export async function isValidVault(vaultPath: string): Promise<boolean> {
-  return pathExists(join(vaultPath, 'AGENTS.md').replace(/\\/g, '/'));
+  return (await findExistingVaultSchemaFile(vaultPath)) !== null;
 }
