@@ -11,6 +11,9 @@ import { findExistingVaultSchemaFile } from '../core/vault.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
+// Scenes are an OPEN set: `init` seeds these recommended starters, but users
+// are free to mkdir new scenes (e.g. `competitive-analysis/`, `trip-planning/`)
+// to fit their domain. See RECOMMENDED_SCENES in core/schema.ts.
 const SCENES = ['personal', 'research', 'reading', 'team'];
 const TYPES = ['entities', 'concepts', 'sources', 'comparisons', 'overviews', 'syntheses'];
 

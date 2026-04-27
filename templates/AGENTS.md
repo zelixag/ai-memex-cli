@@ -14,7 +14,7 @@ description: Personal/team knowledge base maintained by LLM agents
 
 ## Scenes & Types
 
-- **Scenes**: `personal` / `research` / `reading` / `team`
+- **Scenes** (OPEN set, kebab-case): `personal` / `research` / `reading` / `team` are the seeded starters. Add any domain-specific scene as needed: `competitive-analysis`, `trip-planning`, `course-notes`, `hobby-photography`, etc. Just `mkdir wiki/<your-scene>/` and start filing pages with `scene: <your-scene>` in frontmatter. The CLI validates kebab-case format only — it does not gatekeep the value set.
 - **Types** (each maps to its own directory under `wiki/<scene>/`):
   - `entity` — people, companies, tools, projects (`entities/`)
   - `concept` — methodologies, design patterns, abstractions (`concepts/`)

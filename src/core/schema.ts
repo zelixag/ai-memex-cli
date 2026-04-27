@@ -1,7 +1,18 @@
 import matter from 'gray-matter';
 
 export type WikiType = 'entity' | 'concept' | 'source' | 'comparison' | 'overview' | 'synthesis';
-export type WikiScene = 'personal' | 'research' | 'reading' | 'team';
+
+/**
+ * Scene is an OPEN set: any kebab-case identifier is valid.
+ *
+ * RECOMMENDED_SCENES are the curated starters seeded by `memex init`,
+ * but users are free to add `competitive-analysis`, `trip-planning`,
+ * `course-notes`, etc. to fit their domain. This matches the spirit
+ * of the LLM Wiki pattern, where "contexts" are domain-driven.
+ */
+export type WikiScene = string;
+
+export const RECOMMENDED_SCENES = ['personal', 'research', 'reading', 'team'] as const;
 
 export interface Frontmatter {
   name: string;
@@ -62,8 +73,8 @@ export function validateFrontmatter(data: Partial<Frontmatter>): string[] {
   if (data.type && !['entity', 'concept', 'source', 'comparison', 'overview', 'synthesis'].includes(data.type)) {
     errors.push(`Invalid type: ${data.type}`);
   }
-  if (data.scene && !['personal', 'research', 'reading', 'team'].includes(data.scene)) {
-    errors.push(`Invalid scene: ${data.scene}`);
+  if (data.scene != null && data.scene !== '' && !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(data.scene)) {
+    errors.push(`Invalid scene format: ${data.scene} (must be kebab-case, e.g. "personal", "competitive-analysis")`);
   }
   return errors;
 }
