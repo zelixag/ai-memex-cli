@@ -96,12 +96,16 @@ if (!existsSync(websitePkg)) {
 
   if (shouldRebuild) {
     if (args.dryRun) {
-      info("[dry-run] would run: (cd website && pnpm install --frozen-lockfile && pnpm build:gh-pages)");
+      info("[dry-run] would run: (cd website && pnpm install --frozen-lockfile && pnpm build:gh-pages) then node scripts/sync-docs.mjs --no-build");
     } else {
       shPnpm(["install", "--frozen-lockfile"], { cwd: websiteDir });
       shPnpm(["build:gh-pages"], { cwd: websiteDir });
+      // Sync website/dist/public → docs/ and verify the GitHub Pages base path.
+      // Without this, the build sits in dist/ and docs/ keeps stale assets.
+      const syncScript = join(repoRoot, "scripts", "sync-docs.mjs");
+      sh(process.execPath, [syncScript, "--no-build"], { cwd: repoRoot, shell: false });
       websiteRebuilt = true;
-      ok("docs/ rebuilt from website/ source");
+      ok("docs/ rebuilt + synced + base path verified");
     }
   }
 }

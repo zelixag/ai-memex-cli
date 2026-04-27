@@ -15,7 +15,7 @@
     "changelog": "changelogen",
     "changelog:bump": "changelogen --bump --patch",
     "release": "node .claude/skills/release/scripts/orchestrator.mjs",
-    "docs:sync": "cd website && pnpm build:gh-pages"
+    "docs:sync": "node scripts/sync-docs.mjs"
   },
   "keywords": [
     "cli",
