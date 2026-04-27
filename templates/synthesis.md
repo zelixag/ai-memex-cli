@@ -1,9 +1,8 @@
 ---
 name: {{name}}
 description: 
-type: summary
+type: synthesis
 scene: {{scene}}
-subtype: synthesis
 tags: []
 updated: {{date}}
 sources: []

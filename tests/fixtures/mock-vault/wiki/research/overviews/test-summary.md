@@ -1,9 +1,8 @@
 ---
 name: Test Summary
 description: A test summary
-type: summary
+type: overview
 scene: research
-subtype: overview
 tags: [test, fixture]
 updated: 2026-04-15
 sources: [test-source]

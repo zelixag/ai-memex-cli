@@ -1,7 +1,7 @@
 import { resolveVaultPath } from '../core/vault.js';
 import { writeFileUtf8, readFileUtf8, pathExists } from '../utils/fs.js';
 import { logger } from '../utils/logger.js';
-import type { WikiType, WikiScene } from '../core/schema.js';
+import { pluralizeType, type WikiType, type WikiScene } from '../core/schema.js';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -15,7 +15,7 @@ export interface NewOptions {
 
 export async function newCommand(options: NewOptions, cwd: string): Promise<void> {
   // ── Input validation ──────────────────────────────────────────────────────
-  const validTypes = ['entity', 'concept', 'source', 'summary'];
+  const validTypes = ['entity', 'concept', 'source', 'comparison', 'overview', 'synthesis'];
   if (!options.name || !options.name.trim()) {
     logger.error('Page name is required. Usage: memex new <type> <name>');
     logger.info('Example: memex new concept "React Hooks"');
@@ -33,9 +33,7 @@ export async function newCommand(options: NewOptions, cwd: string): Promise<void
 
   const vault = await resolveVaultPath({ explicitPath: options.vault }, cwd);
   const id = toKebabCase(options.name);
-  const typeDir = options.type === 'summary' ? 'summaries' :
-                  options.type === 'entity' ? 'entities' :
-                  options.type === 'concept' ? 'concepts' : 'sources';
+  const typeDir = pluralizeType(options.type);
   const filePath = `${vault}/wiki/${options.scene}/${typeDir}/${id}.md`;
 
   if (await pathExists(filePath)) {

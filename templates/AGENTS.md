@@ -15,7 +15,15 @@ description: Personal/team knowledge base maintained by LLM agents
 ## Scenes & Types
 
 - **Scenes**: `personal` / `research` / `reading` / `team`
-- **Types**: `entity` / `concept` / `source` / `summary`
+- **Types** (each maps to its own directory under `wiki/<scene>/`):
+  - `entity` — people, companies, tools, projects (`entities/`)
+  - `concept` — methodologies, design patterns, abstractions (`concepts/`)
+  - `source` — articles, papers, web pages, session distillations (`sources/`)
+  - `comparison` — side-by-side analysis of 2+ entities/concepts (`comparisons/`)
+  - `overview` — broad survey of a topic, area, or vault state (`overviews/`)
+  - `synthesis` — derived insights, theses, or non-trivial connections (`syntheses/`)
+
+The 3 synthetic types (comparison / overview / synthesis) replace the older single `summary` + `subtype` field. Each is a parallel first-class type with its own directory.
 
 ## Workflows
 
@@ -24,12 +32,14 @@ description: Personal/team knowledge base maintained by LLM agents
 When running `memex ingest <raw-file>`:
 
 1. Read the raw source file
-2. Identify the appropriate scene and type
-3. Create or update entity/concept/source pages in `wiki/<scene>/`
-4. If summary-worthy, create a `summary` page
-5. Update `index.md` with new page entries
-6. Append to `log.md`: `## [YYYY-MM-DD] ingest | <source-name>`
-7. Do NOT modify `raw/` files
+2. **Discuss the key takeaways with the user before writing anything** — confirm what is worth integrating, what is duplicative, and what should be skipped. Ingest is collaborative, not auto-pilot.
+3. Identify the appropriate scene and type
+4. Create or update entity/concept/source pages in `wiki/<scene>/`. **A single source typically touches 10–15 wiki pages** (one source page plus updates to many existing entity/concept/summary pages); don't stop at writing a single source page.
+5. **When new claims contradict existing wiki content, explicitly note the contradiction** (e.g. quote both sides, link the conflicting pages, mark which source is newer) rather than silently overwriting. Preserving contradictions is how the wiki compounds honestly over time.
+6. If summary-worthy, create a `summary` page
+7. Update `index.md` with new page entries
+8. Append to `log.md`: `## [YYYY-MM-DD] ingest | <source-name>`
+9. Do NOT modify `raw/` files
 
 ### Query
 
@@ -37,8 +47,13 @@ When answering questions:
 
 1. Read `index.md` to find relevant pages
 2. Drill into relevant pages
-3. Synthesize answer with `[[page]]` citations
-4. If answer is durable, file it as a new wiki page
+3. Synthesize answer with `[[page]]` citations. The answer is not limited to plain markdown — pick whichever shape best fits the question:
+   - markdown page (default)
+   - comparison table (when contrasting 2+ entities/concepts)
+   - Marp slide deck (when the answer benefits from sequencing)
+   - matplotlib / chart code (when the answer is quantitative)
+   - canvas / diagram (when the answer is structural)
+4. **File the answer back as a new wiki page when it is durable** — pick the right type and directory: comparisons → `comparisons/<topic>.md`, broad surveys → `overviews/<topic>.md`, derived insights/theses → `syntheses/<topic>.md`. Don't let durable Q&A pairs disappear into chat history.
 
 ### Lint
 
@@ -59,7 +74,7 @@ Lint runs in two layers — the CLI does the mechanical pass, the agent does the
 5. **Data gaps fillable by web search** — pages where a missing fact could be filled by fetching a new source
 6. **Suggested new questions / sources** — directions the current wiki implies are worth ingesting next
 
-Output of the semantic pass can be either direct repairs (edit affected pages) or a new task page filed back into the wiki (e.g. `summaries/lint-report-YYYY-MM-DD.md`). Treat lint as a wiki-improvement workflow, not just a validator.
+Output of the semantic pass can be either direct repairs (edit affected pages) or a new task page filed back into the wiki (e.g. `overviews/lint-report-YYYY-MM-DD.md` with `type: overview`). Treat lint as a wiki-improvement workflow, not just a validator.
 
 ## Page Format
 

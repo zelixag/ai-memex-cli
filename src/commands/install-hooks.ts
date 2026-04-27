@@ -160,7 +160,7 @@ const MEMEX_COMMANDS: MemexCommand[] = [
     shellCmd: 'memex lint $ARGS',
     workflow: 'Lint',
     reference: 'references/lint-workflow.md',
-    cliHint: 'Start with `memex lint --json` for the mechanical baseline, then scan the wiki for the 6 semantic categories. File anything unresolved to `summaries/lint-report-YYYY-MM-DD.md` and append `log.md`.',
+    cliHint: 'Start with `memex lint --json` for the mechanical baseline, then scan the wiki for the 6 semantic categories. File anything unresolved to `overviews/lint-report-YYYY-MM-DD.md` (type: overview) and append `log.md`.',
     examples: [
       '/memex:lint',
       '/memex:lint --scene team',

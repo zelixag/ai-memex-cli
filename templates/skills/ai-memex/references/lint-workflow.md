@@ -33,9 +33,9 @@ The JSON report is the input to the semantic pass.
 3. Classify findings into three buckets: safe mechanical fix, requires review, report only.
 4. Apply safe mechanical fixes directly.
 5. Ask the user before applying anything in "requires review".
-6. File anything in "report only" — and any unresolved findings — into a new page: `summaries/lint-report-YYYY-MM-DD.md` with durable observations and suggested actions. Treat lint output as compounding wiki content, not as throwaway shell output.
+6. File anything in "report only" — and any unresolved findings — into a new page: `overviews/lint-report-YYYY-MM-DD.md` (`type: overview`) with durable observations and suggested actions. Treat lint output as compounding wiki content, not as throwaway shell output.
 7. Re-run `memex lint` after edits to confirm the mechanical layer is clean.
-8. Append a `log.md` entry summarizing what changed and what remains open (`## [YYYY-MM-DD] lint | <scope>` is a good prefix).
+8. Append a `log.md` entry summarizing what changed and what remains open. Use the canonical format from the LLM Wiki pattern: `## [YYYY-MM-DD] lint | <scope>` (heading-level, bracketed date, verb, pipe separator) so the log stays parseable with simple shell tools.
 
 ## Safe Mechanical Fixes
 

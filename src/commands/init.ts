@@ -12,7 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 const SCENES = ['personal', 'research', 'reading', 'team'];
-const TYPES = ['entities', 'concepts', 'sources', 'summaries'];
+const TYPES = ['entities', 'concepts', 'sources', 'comparisons', 'overviews', 'syntheses'];
 
 export interface InitOptions {
   scope: 'global' | 'local';

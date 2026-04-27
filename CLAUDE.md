@@ -74,7 +74,9 @@ Vault 分两层：默认 wiki（`~/.llmwiki/`，旧版可能仍为 `~/.llmwiki/g
 │       ├── entities/       # 实体：人物、公司、工具、项目
 │       ├── concepts/       # 概念：方法论、设计模式、技术栈
 │       ├── sources/        # 源文档：文章、论文、网页、会话蒸馏
-│       └── summaries/      # 合成页（comparison / overview / synthesis）
+│       ├── comparisons/    # 对比：两个或多个实体/概念的并列分析
+│       ├── overviews/      # 总览：领域、项目或 vault 状态的横扫
+│       └── syntheses/      # 综合：派生洞察、论点、非显而易见的连接
 ├── AGENTS.md               # wiki schema 定义
 ├── index.md                # wiki 目录（agent 更新）
 └── log.md                  # append-only 时间线
@@ -87,13 +89,17 @@ Vault 分两层：默认 wiki（`~/.llmwiki/`，旧版可能仍为 `~/.llmwiki/g
 └── AGENTS.md               # 项目级 schema，可包含 @include 指令
 ```
 
-**Wiki 页面类型（frontmatter `type` 字段）**
+**Wiki 页面类型（frontmatter `type` 字段）— 6 种平级 type**
 | 类型 | 目录 | 说明 |
 |------|------|------|
-| `entity` | `entities/` | 实体页 |
-| `concept` | `concepts/` | 概念页 |
-| `source` | `sources/` | 源文档页 |
-| `summary` | `summaries/` | 合成页，额外含 `subtype: comparison \| overview \| synthesis` |
+| `entity` | `entities/` | 人物、公司、工具、项目 |
+| `concept` | `concepts/` | 方法论、设计模式、技术栈 |
+| `source` | `sources/` | 文章、论文、网页、会话蒸馏 |
+| `comparison` | `comparisons/` | 2+ 实体/概念的并列对比 |
+| `overview` | `overviews/` | 领域、项目或 vault 状态的横扫 |
+| `synthesis` | `syntheses/` | 派生洞察、论点、非显而易见的连接 |
+
+> ⚠️ 旧 schema 的 `type: summary` + `subtype: comparison|overview|synthesis` 已废弃；改为 6 种平级 type，每种独立目录。降低心智成本，对齐 Karpathy LLM Wiki pattern 原文。
 
 **`@include` 语法（仅 local `AGENTS.md`）**
 `memex inject` 解析以下行并拼接输出：

@@ -1,6 +1,6 @@
 import matter from 'gray-matter';
 
-export type WikiType = 'entity' | 'concept' | 'source' | 'summary';
+export type WikiType = 'entity' | 'concept' | 'source' | 'comparison' | 'overview' | 'synthesis';
 export type WikiScene = 'personal' | 'research' | 'reading' | 'team';
 
 export interface Frontmatter {
@@ -12,7 +12,6 @@ export interface Frontmatter {
   updated?: string;
   sources?: string[];
   related?: string[];
-  subtype?: 'comparison' | 'overview' | 'synthesis';
   'source-url'?: string;
   'source-date'?: string;
   ingested?: string;
@@ -40,6 +39,19 @@ export function stringifyFrontmatter(data: Partial<Frontmatter>, body: string): 
 
 export const REQUIRED_FIELDS: (keyof Frontmatter)[] = ['name', 'description', 'type', 'scene'];
 
+const TYPE_DIRS: Record<WikiType, string> = {
+  entity: 'entities',
+  concept: 'concepts',
+  source: 'sources',
+  comparison: 'comparisons',
+  overview: 'overviews',
+  synthesis: 'syntheses',
+};
+
+export function pluralizeType(type: string): string {
+  return TYPE_DIRS[type as WikiType] ?? 'sources';
+}
+
 export function validateFrontmatter(data: Partial<Frontmatter>): string[] {
   const errors: string[] = [];
   for (const field of REQUIRED_FIELDS) {
@@ -47,7 +59,7 @@ export function validateFrontmatter(data: Partial<Frontmatter>): string[] {
       errors.push(`Missing required field: ${field}`);
     }
   }
-  if (data.type && !['entity', 'concept', 'source', 'summary'].includes(data.type)) {
+  if (data.type && !['entity', 'concept', 'source', 'comparison', 'overview', 'synthesis'].includes(data.type)) {
     errors.push(`Invalid type: ${data.type}`);
   }
   if (data.scene && !['personal', 'research', 'reading', 'team'].includes(data.scene)) {

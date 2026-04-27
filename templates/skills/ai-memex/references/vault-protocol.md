@@ -37,7 +37,9 @@ memex status
       entities/
       concepts/
       sources/
-      summaries/
+      comparisons/
+      overviews/
+      syntheses/
   AGENTS.md
   index.md
   log.md
@@ -58,7 +60,9 @@ memex status
 | `entity` | `entities/` | People, companies, tools, projects, institutions |
 | `concept` | `concepts/` | Methods, principles, patterns, technical ideas |
 | `source` | `sources/` | Articles, papers, docs, sessions, raw source summaries |
-| `summary` | `summaries/` | Comparisons, overviews, syntheses |
+| `comparison` | `comparisons/` | Side-by-side analysis of 2+ entities or concepts |
+| `overview` | `overviews/` | Broad survey of a topic, area, or vault state |
+| `synthesis` | `syntheses/` | Derived insights, theses, non-trivial connections |
 
 ## Frontmatter Baseline
 

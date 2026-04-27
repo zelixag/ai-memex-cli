@@ -1,4 +1,5 @@
 import { resolveVaultPath } from '../core/vault.js';
+import { pluralizeType } from '../core/schema.js';
 import { runCommand, commandExists } from '../utils/exec.js';
 import { listMarkdownFiles, readFileUtf8, pathExists } from '../utils/fs.js';
 import { logger } from '../utils/logger.js';
@@ -87,9 +88,7 @@ export async function searchCommand(options: SearchOptions, cwd: string): Promis
     results = results.filter(r => r.path.includes(`/${options.scene}/`));
   }
   if (options.type) {
-    const typeDir = options.type === 'summary' ? 'summaries' :
-                    options.type === 'entity' ? 'entities' :
-                    options.type === 'concept' ? 'concepts' : 'sources';
+    const typeDir = pluralizeType(options.type);
     results = results.filter(r => r.path.includes(`/${typeDir}/`));
   }
 
