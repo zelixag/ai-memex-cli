@@ -42,7 +42,7 @@ ai-memex 在这个 pattern 外面补了一层工程化实现：
 日常使用发生在 agent 里：
 
 1. **Capture（捕获）** —— `/memex:capture` 把 URL、文件、粘贴文本或搜索结果保存到 `raw/`。
-2. **Ingest（导入）** —— `/memex:ingest` 让 agent 把 raw material 编译成可持久维护的 entity / concept / source / summary 页面。
+2. **Ingest（导入）** —— `/memex:ingest` 让 agent 把 raw material 编译成可持久维护的 entity / concept / source / comparison / overview / synthesis 页面。
 3. **Query（查询）** —— `/memex:query` 从已有 wiki 中带 citation 回答，而不是每次从零重新推导。
 4. **Distill（蒸馏）** —— `/memex:distill` 把有价值的 debug、planning 或 research 对话变成 raw session material。
 5. **Lint（健康检查）** —— `/memex:lint` 运行双层健康检查（CLI 机械层 + agent 语义层），让 agent 应用安全修复，同时保留矛盾和来源。
@@ -326,7 +326,9 @@ memex context uninstall
 │       ├── entities/      # 人、工具、组织（每个真实对象一页）
 │       ├── concepts/      # 思想、模式、方法论
 │       ├── sources/       # 每个外部文档（URL、PDF …）一页
-│       └── summaries/     # 跨页综合（子类型：overview/comparison/synthesis）
+│       ├── comparisons/   # 两个或多个实体/概念的并列对比
+│       ├── overviews/     # 领域、项目或 vault 状态的横扫
+│       └── syntheses/     # 派生洞察、论点、非显而易见的连接
 └── .llmwiki/
     ├── config.json        # 单 vault 配置（被 gitignore）
     ├── watch.pid          # `memex watch --daemon` 的进程 ID
@@ -334,7 +336,7 @@ memex context uninstall
     └── watch.status.json  # `memex watch --status` 读取的实时快照
 ```
 
-每个 wiki 页面由**两个正交维度**分类：**scene**（`personal` / `research` / `reading` / `team`）× **type**（`entity` / `concept` / `source` / `summary`）。物理路径 = `wiki/<scene>/<type>s/<slug>.md`；frontmatter 里的 `type:` 字段使用**单数**形式。
+每个 wiki 页面由**两个正交维度**分类：**scene**（`personal` / `research` / `reading` / `team`）× **type**（`entity` / `concept` / `source` / `comparison` / `overview` / `synthesis`）。物理路径 = `wiki/<scene>/<type>s/<slug>.md`；frontmatter 里的 `type:` 字段使用**单数**形式。
 
 ---
 
@@ -354,18 +356,20 @@ memex context uninstall
 | `memex inject` | 输出拼接好的 wiki 上下文供 agent 消费 |
 | `memex search <query>` | 在 wiki 与 raw 中全文搜索并相关性打分 |
 | `memex lint` | 扫描 wiki 健康度（孤儿页、断链、缺失 frontmatter 等） |
+| `memex migrate` | 迁移旧 schema wiki 页到新架构 |
 
 ### 辅助命令
 
 | 命令 | 说明 |
 |------|------|
 | `memex init` | 手动初始化新的 vault |
-| `memex new <type> <name>` | 基于模板脚手架一个新 wiki 页（entity / concept / source / summary） |
+| `memex new <type> <name>` | 基于模板脚手架一个新 wiki 页（entity / concept / source / comparison / overview / synthesis） |
 | `memex log <action>` | 追加一条格式化的条目到 `log.md` |
 | `memex status` | 查看 vault 总览与统计（支持 `--json`） |
 | `memex link-check` | 校验所有页面的 `[[wikilink]]` |
 | `memex install-hooks` | 为你的 agent 生成自定义 slash 命令 |
 | `memex config <sub>` | 管理 CLI 配置（`set` / `get` / `list` / `agents`） |
+| `memex migrate` | 迁移旧 schema wiki 页到新架构 |
 | `memex update` | 自更新到最新版（自动识别 npm / git 安装） |
 
 ### 命令详情
@@ -524,7 +528,7 @@ sources: [react-docs-2026]
 ...
 ```
 
-页面类型：`entity`（人、工具、组织）、`concept`（思想、模式）、`source`（引用来源）、`summary`（综合概览）。
+页面类型：`entity`（人、工具、组织）、`concept`（思想、模式）、`source`（引用来源）、`comparison`（并列对比）、`overview`（领域/项目横扫）、`synthesis`（派生洞察与连接）。
 
 ---
 

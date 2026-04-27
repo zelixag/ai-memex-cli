@@ -321,7 +321,9 @@ Target files depend on the agent (`CLAUDE.md` for Claude Code, `AGENTS.md` for C
 │       ├── entities/      # People, tools, orgs (one per real-world object)
 │       ├── concepts/      # Ideas, patterns, methodologies
 │       ├── sources/       # One page per external document (URL, PDF…)
-│       └── summaries/     # Cross-page synthesis (subtype: overview/comparison/synthesis)
+│       ├── comparisons/   # Side-by-side analysis of 2+ entities/concepts
+│       ├── overviews/     # Domain, project, or vault-wide sweep
+│       └── syntheses/     # Derived insights, arguments, non-obvious connections
 └── .llmwiki/
     ├── config.json        # Per-vault configuration (gitignored)
     ├── watch.pid          # `memex watch --daemon` process id
@@ -329,7 +331,7 @@ Target files depend on the agent (`CLAUDE.md` for Claude Code, `AGENTS.md` for C
     └── watch.status.json  # Live status snapshot read by `memex watch --status`
 ```
 
-Two orthogonal dimensions classify every wiki page: **scene** (`personal` / `research` / `reading` / `team`) × **type** (`entity` / `concept` / `source` / `summary`). Physical path = `wiki/<scene>/<type>s/<slug>.md`; the `type:` frontmatter field uses the singular form.
+Two orthogonal dimensions classify every wiki page: **scene** (`personal` / `research` / `reading` / `team`) × **type** (`entity` / `concept` / `source` / `comparison` / `overview` / `synthesis`). Physical path = `wiki/<scene>/<type>s/<slug>.md`; the `type:` frontmatter field uses the singular form.
 
 ---
 
@@ -349,18 +351,20 @@ Two orthogonal dimensions classify every wiki page: **scene** (`personal` / `res
 | `memex inject` | Output concatenated wiki context for agent consumption |
 | `memex search <query>` | Full-text search across wiki and raw files with relevance scoring |
 | `memex lint` | Scan wiki health (orphans, broken links, missing frontmatter) |
+| `memex migrate` | Migrate legacy schema wiki pages to newer schema |
 
 ### Utility Commands
 
 | Command | Description |
 |---------|-------------|
 | `memex init` | Initialize a new vault manually |
-| `memex new <type> <name>` | Scaffold a new wiki page from a template (entity, concept, source, summary) |
+| `memex new <type> <name>` | Scaffold a new wiki page from a template (entity, concept, source, comparison, overview, synthesis) |
 | `memex log <action>` | Append a formatted entry to the chronological `log.md` |
 | `memex status` | View vault overview and statistics (supports `--json`) |
 | `memex link-check` | Validate `[[wikilinks]]` across all pages |
 | `memex install-hooks` | Generate custom slash commands for your agent |
 | `memex config <sub>` | Manage CLI configuration (`set`, `get`, `list`, `agents`) |
+| `memex migrate` | Migrate legacy schema wiki pages to newer schema |
 | `memex update` | Self-update to the latest version (auto-detects npm or git install) |
 
 ### Command Details
@@ -519,7 +523,7 @@ sources: [react-docs-2026]
 ...
 ```
 
-Page types: `entity` (people, tools, orgs), `concept` (ideas, patterns), `source` (reference citations), `summary` (synthesized overviews).
+Page types: `entity` (people, tools, orgs), `concept` (ideas, patterns), `source` (reference citations), `comparison` (side-by-side analysis), `overview` (domain/project sweep), `synthesis` (derived insights and connections).
 
 ---
 

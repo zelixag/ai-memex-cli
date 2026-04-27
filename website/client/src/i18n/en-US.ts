@@ -49,7 +49,7 @@ You: /memex:query "what do we know about agent memory vs RAG?"`,
           {
             heading: "How you use it",
             text:
-              "You stay in the agent conversation. When you find an article, paper, repo, issue, or experiment note, ask the agent to capture it into raw sources. After a small batch, ask the agent to ingest the material into source, concept, entity, and summary pages.",
+              "You stay in the agent conversation. When you find an article, paper, repo, issue, or experiment note, ask the agent to capture it into raw sources. After a small batch, ask the agent to ingest the material into source, concept, entity, and overview pages.",
             steps: [
               "Keep the topic in the main user or company knowledge repo, usually under a research scene or tag.",
               "Ask the agent to capture sources before drawing conclusions, so raw evidence remains traceable.",
@@ -58,7 +58,7 @@ You: /memex:query "what do we know about agent memory vs RAG?"`,
             ],
             code: `You: /memex:capture "agent memory design tradeoffs" --scene research
 Agent: saves raw sources and records where they came from.
-You: /memex:ingest them into source, concept, and summary pages.`,
+You: /memex:ingest them into source, concept, and overview pages.`,
           },
           {
             heading: "Recommended rhythm",
@@ -455,7 +455,9 @@ memex context status`,
       { indent: 3, text: "entities/", note: "People, tools, orgs" },
       { indent: 3, text: "concepts/", note: "Ideas, patterns" },
       { indent: 3, text: "sources/", note: "Reference citations" },
-      { indent: 3, text: "summaries/", note: "Synthesized overviews" },
+      { indent: 3, text: "comparisons/", note: "Side-by-side analysis" },
+      { indent: 3, text: "overviews/", note: "Domain/project sweep" },
+      { indent: 3, text: "syntheses/", note: "Derived insights & connections" },
     ],
     principleTitle: "Core Design Principle",
     principleLead: "The CLI makes ",
@@ -466,7 +468,7 @@ memex context status`,
   commands: {
     sectionTitle: "Command Reference",
     sectionSubtitle:
-      "18 commands covering the full lifecycle — from fetching and ingesting raw sources to distilling sessions, linting wiki health, and installing slash commands in your agent.",
+      "19 commands covering the full lifecycle — from fetching and ingesting raw sources to distilling sessions, linting wiki health, migrating legacy schemas, and installing slash commands in your agent.",
     coreTab: (n: number) => `Core Commands (${n})`,
     utilTab: (n: number) => `Utility Commands (${n})`,
     options: "Options",
@@ -578,7 +580,7 @@ memex context status`,
       new: {
         desc: "Scaffold a new wiki page from a template.",
         usage: 'memex new concept "React Hooks"\nmemex new entity "Anthropic"',
-        flags: ["<type>  entity | concept | source | summary", "<name>  Page name"],
+        flags: ["<type>  entity | concept | source | comparison | overview | synthesis", "<name>  Page name"],
       },
       log: {
         desc: "Append a formatted entry to the chronological log.md.",
@@ -635,6 +637,15 @@ memex context status`,
           "get <key>        Get a config value",
           "list             Show all config",
           "agents           List supported agents",
+        ],
+      },
+      migrate: {
+        desc: "Migrate legacy schema wiki pages to the newer 6-type schema.",
+        usage: "memex migrate --from-summary-subtype --dry-run\nmemex migrate --from-summary-subtype",
+        flags: [
+          "--from-summary-subtype  Convert type:summary+subtype to 6 parallel types",
+          "--dry-run               Preview changes without touching files",
+          "--vault <path>          Vault path",
         ],
       },
       update: {

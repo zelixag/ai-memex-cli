@@ -7,7 +7,7 @@ import {
   Compass, Globe, FileInput, Beaker, Grid3x3, Syringe,
   Search, AlertTriangle, FolderPlus, FilePlus, ScrollText,
   BarChart3, Link2, Settings, RefreshCw, Rocket,
-  Activity, Layers,
+  Activity, Layers, ArrowRightLeft,
 } from "lucide-react";
 import { useI18n } from "@/i18n";
 
@@ -32,6 +32,7 @@ const UTIL_ORDER = [
   "context",
   "install-hooks",
   "config",
+  "migrate",
   "update",
 ] as const;
 
@@ -59,6 +60,7 @@ const UTIL_ICONS: Record<UtilKey, ElementType> = {
   context: Layers,
   "install-hooks": Compass,
   config: Settings,
+  migrate: ArrowRightLeft,
   update: RefreshCw,
 };
 
