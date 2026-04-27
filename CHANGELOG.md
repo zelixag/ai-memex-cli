@@ -4,6 +4,46 @@
 
 **首次增量发版前（只需一次）**：在当前基线提交上打标签，之后新版本只会统计该标签之后的提交：`git tag v0.1.0` 并 `git push origin v0.1.0`（若尚未打过 `v0.1.0`）。
 
+## v0.5.0
+
+### ⚠️ BREAKING CHANGE — Wiki Page Schema Revamped
+
+**`type: summary` + `subtype` 已废弃**，替换为 6 个平级 `type`：
+
+| 旧 schema | 新 schema | 新目录 |
+|-----------|-----------|--------|
+| `type: summary`<br>`subtype: comparison` | `type: comparison` | `comparisons/` |
+| `type: summary`<br>`subtype: overview` | `type: overview` | `overviews/` |
+| `type: summary`<br>`subtype: synthesis` | `type: synthesis` | `syntheses/` |
+
+`entity` / `concept` / `source` 三种 type 不受影响。
+
+**迁移方法**：已有 wiki 的用户请运行以下命令完成自动迁移：
+
+```bash
+memex migrate --from-summary-subtype --dry-run  # 先预览
+memex migrate --from-summary-subtype           # 执行迁移
+```
+
+迁移命令会：
+1. 扫描所有 `wiki/<scene>/summaries/*.md` 文件
+2. 读取 frontmatter 的 `subtype` 字段 → 改写 `type`
+3. 删除 `subtype` 字段
+4. 将文件移至对应的 `comparisons/` / `overviews/` / `syntheses/` 目录
+
+> 注意：`summaries/` 目录现已废弃，建议运行迁移后手动删除空目录。
+
+### 🚀 Enhancements
+
+- **`memex migrate --from-summary-subtype`**：一键迁移旧 schema wiki 页至 6-type 新架构，自动处理文件重命名与 frontmatter 重写，支持 `--dry-run` 预览。([`2cd6342`](https://github.com/zelixag/ai-memex-cli/commit/2cd6342))
+- **Scene 从固定 enum 改为开放集**：所有命令的 `--scene` 参数现在接受任意 kebab-case 字符串，不再限制于 `personal/research/reading/team` 四选一。推荐场景仍保留作为 seed。([`2cd6342`](https://github.com/zelixag/ai-memex-cli/commit/2cd6342))
+- **`/memex:lint` 替换旧 `/memex:repair`**：升级为两层 lint 架构（CLI 机械校验层 + Agent 语义修复层），符合 Karpathy LLM Wiki pattern。([`3a05121`](https://github.com/zelixag/ai-memex-cli/commit/3a05121))
+- **`memex watch --heal` 自动修复**：watch daemon 模式下新增 `--heal` 标志，定期运行 lint 并在发现问题时自动进入 ingest→lint 自愈循环，无需等待文件变化。([`3a05121`](https://github.com/zelixag/ai-memex-cli/commit/3a05121))
+
+### 🩹 Fixes
+
+- **docs/ 部署护栏**：所有指向 docs/ 的资源链接现在强制使用 `/ai-memex-cli/` base path，防止本地预览与 GitHub Pages 路径不一致。([`eee5182`](https://github.com/zelixag/ai-memex-cli/commit/eee5182))
+
 ## v0.3.0
 
 ### 🚀 Enhancements

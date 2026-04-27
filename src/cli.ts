@@ -18,6 +18,7 @@ import { configCommand } from './commands/config.js';
 import { onboardCommand } from './commands/onboard.js';
 import { updateCommand } from './commands/update.js';
 import { contextCommand } from './commands/context.js';
+import { migrateCommand } from './commands/migrate.js';
 import { getPackageVersion } from './version.js';
 import { ensureVault, ensureAgent } from './core/prereqs.js';
 import { logger } from './utils/logger.js';
@@ -467,6 +468,22 @@ cli.command('context [subcommand]', 'Manage L0 project-root context bootstrap bl
       all: options.all as boolean | undefined,
       quiet: options.quiet as boolean | undefined,
       dryRun: options.dryRun as boolean | undefined,
+    }, process.cwd());
+  });
+
+// ── Migrations ────────────────────────────────────────────────────────────────
+
+cli.command('migrate', 'Migrate the vault to a newer schema')
+  .option('--from-summary-subtype', 'Convert legacy `type: summary` + `subtype` pages to the 6-type schema (v0.5.0+)')
+  .option('--dry-run', 'Print what would change without touching files')
+  .option('--vault <vault>', 'Vault path')
+  .example('memex migrate --from-summary-subtype --dry-run')
+  .example('memex migrate --from-summary-subtype')
+  .action(async (options: Record<string, unknown>) => {
+    await migrateCommand({
+      fromSummarySubtype: options.fromSummarySubtype as boolean | undefined,
+      dryRun: options.dryRun as boolean | undefined,
+      vault: options.vault as string | undefined,
     }, process.cwd());
   });
 

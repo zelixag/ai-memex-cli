@@ -1,6 +1,6 @@
 {
   "name": "ai-memex-cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Git-backed Markdown knowledge base maintained by AI agents",
   "type": "module",
   "bin": {
