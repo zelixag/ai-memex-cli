@@ -150,19 +150,19 @@ SessionEnd hook   → distill → raw/sessions/session-*.md
 This project is connected to a persistent knowledge base (LLM Wiki) managed by the `memex` CLI.
 
 - **Vault**: `C:/Users/Administrator/.llmwiki`
-- **Pages**: 16 (team: 16)
+- **Pages**: 25 (team: 25)
 - **Updated**: 2026-04-25
 - **Agent**: claude-code
 
 ### Index digest
 
-**team** — 16 pages
+**team** — 25 pages
+- [[agent-native-iteration-plan-2026-04-24]] — ai-memex-cli 从 CLI-first 转向 agent-native wiki 工作流的迭代计划文档
 - [[agent-first-memex-workflow]] — agent skill 是主界面，CLI 是工具箱的产品与架构原则
 - [[agent-native-architecture]] — ai-memex-cli 三层架构设计：Agent Interface、Workflow Protocol、CLI Toolbox
 - [[cli-toolbox-boundary]] — CLI 不负责语义写作、不调 LLM API、只做机械原语的架构边界定义
 - [[multi-agent-installation]] — agent profiles、slash prompts、skills、context files、user/project scope
-- [[release-skill-workflow]] — .claude/skills/release/ 的 11 阶段发版管线设计
-- …11 more (run `memex status --scene team`)
+- …20 more (run `memex status --scene team`)
 
 ### How to use memex from this session
 
