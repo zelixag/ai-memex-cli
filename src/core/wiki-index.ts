@@ -40,10 +40,13 @@ export async function buildWikiIndex(wikiDir: string): Promise<WikiIndex> {
 }
 
 export function extractWikiLinks(body: string): string[] {
+  // Strip fenced code blocks (multiline) and inline code before matching.
+  const withoutCodeBlocks = body.replace(/```[\s\S]*?```/g, '');
+  const withoutInlineCode = withoutCodeBlocks.replace(/`[^`]+`/g, '');
   const regex = /\[\[([^\]]+)\]\]/g;
   const links: string[] = [];
   let match: RegExpExecArray | null;
-  while ((match = regex.exec(body)) !== null) {
+  while ((match = regex.exec(withoutInlineCode)) !== null) {
     links.push(match[1].trim());
   }
   return [...new Set(links)];

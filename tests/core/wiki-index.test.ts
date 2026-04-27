@@ -34,4 +34,26 @@ describe('buildWikiIndex', () => {
     const index = await buildWikiIndex(dir);
     expect(index.pages.length).toBe(0);
   });
+
+  it('ignores wiki links inside fenced code blocks', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'wiki-'));
+    await mkdir(join(dir, 'research', 'concepts'), { recursive: true });
+    await writeFile(
+      join(dir, 'research', 'concepts', 'with-code.md'),
+      '---\nname: With Code\ndescription: Code block example\ntype: concept\nscene: research\n---\n```bash\nmemex link-check  # [[ref]] in code block\n```\nSee [[real-page]] for more.'
+    );
+    const index = await buildWikiIndex(dir);
+    expect(index.pages[0].outboundLinks).toEqual(['real-page']);
+  });
+
+  it('ignores wiki links inside inline code', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'wiki-'));
+    await mkdir(join(dir, 'research', 'concepts'), { recursive: true });
+    await writeFile(
+      join(dir, 'research', 'concepts', 'inline-code.md'),
+      '---\nname: Inline\ndescription: Inline code example\ntype: concept\nscene: research\n---\nUse `[[fake]]` as placeholder syntax. Check [[actual-link]].'
+    );
+    const index = await buildWikiIndex(dir);
+    expect(index.pages[0].outboundLinks).toEqual(['actual-link']);
+  });
 });
