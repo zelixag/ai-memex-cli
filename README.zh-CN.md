@@ -17,7 +17,7 @@
 
 这其实是信息管理领域最古老的想法 —— Vannevar Bush 在 1945 年提出的 **Memex**。Bush 的愿景有一个未解之题：*谁来做维护？* LLM 刚好填补了这个缺口 —— 它们不会在更新交叉引用时感到厌倦，而且能在一个 pass 里触达 15 个页面。
 
-**ai-memex 是什么：** 一个由 AI Agent 持续维护、由 Git 管理版本的 Markdown 知识库。安装后的 `ai-memex` skill 负责判断什么时候 capture、ingest、query、distill 或 repair 知识；`memex` CLI 则退到底层，作为可靠的机械工具箱：抓取 source、搜索 wiki、校验 link/frontmatter、初始化 vault、安装 agent commands/skills、解析 session。
+**ai-memex 是什么：** 一个由 AI Agent 持续维护、由 Git 管理版本的 Markdown 知识库。安装后的 `ai-memex` skill 负责判断什么时候 capture、ingest、query、distill 或 lint 知识；`memex` CLI 则退到底层，作为可靠的机械工具箱：抓取 source、搜索 wiki、校验 link/frontmatter、初始化 vault、安装 agent commands/skills、解析 session。
 
 **它不是什么：** 它**不是** RAG 系统、**不是** MCP memory server、**不是**黑盒向量存储。CLI 本身**不调用任何 LLM API**。真正的语义工作由你本地的 agent（Claude Code、Cursor、Codex、Gemini……）通过 skill 完成。wiki 本身就是 git 仓库里的纯 Markdown —— 你可以读、可以改、可以 diff、可以 blame。
 
@@ -45,7 +45,7 @@ ai-memex 在这个 pattern 外面补了一层工程化实现：
 2. **Ingest（导入）** —— `/memex:ingest` 让 agent 把 raw material 编译成可持久维护的 entity / concept / source / summary 页面。
 3. **Query（查询）** —— `/memex:query` 从已有 wiki 中带 citation 回答，而不是每次从零重新推导。
 4. **Distill（蒸馏）** —— `/memex:distill` 把有价值的 debug、planning 或 research 对话变成 raw session material。
-5. **Repair（修复）** —— `/memex:repair` 运行健康检查，让 agent 修复安全的 wiki 问题，同时保留矛盾和来源。
+5. **Lint（健康检查）** —— `/memex:lint` 运行双层健康检查（CLI 机械层 + agent 语义层），让 agent 应用安全修复，同时保留矛盾和来源。
 6. **Status（状态）** —— `/memex:status` 展示当前 vault 状态和可能的下一步。
 
 CLI 命令仍然存在，但它们是 skill 在需要时调用的工具箱：
@@ -124,7 +124,7 @@ memex onboard --agent claude-code -y
 /memex:ingest
 /memex:query "我关于 React hooks tradeoffs 知道什么？"
 /memex:distill this debugging session
-/memex:repair
+/memex:lint
 ```
 
 对 Claude Code 来说，`memex onboard` / `memex install-hooks` 会同时安装：

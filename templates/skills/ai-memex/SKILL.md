@@ -2,13 +2,13 @@
 name: ai-memex
 description: >-
   Maintain an agent-native LLM wiki / AI memex using raw sources, durable
-  Markdown wiki pages, citations, lint repair, session distillation, and the
-  memex CLI toolbox. Use when the user asks to capture sources, ingest material
-  into raw/ or wiki/, query "what do I know about...", distill conversations,
-  repair/lint a wiki, or work with Karpathy-style LLM wiki / agent memory /
-  compounding knowledge workflows. Also use when the user invokes memex
-  slash prompts such as /memex:capture, /memex:ingest, /memex:query,
-  /memex:distill, /memex:repair, or /memex:status.
+  Markdown wiki pages, citations, two-layer lint (mechanical + semantic),
+  session distillation, and the memex CLI toolbox. Use when the user asks to
+  capture sources, ingest material into raw/ or wiki/, query "what do I know
+  about...", distill conversations, lint or health-check a wiki, or work with
+  Karpathy-style LLM wiki / agent memory / compounding knowledge workflows.
+  Also use when the user invokes memex slash prompts such as /memex:capture,
+  /memex:ingest, /memex:query, /memex:distill, /memex:lint, or /memex:status.
 ---
 
 # ai-memex
@@ -25,7 +25,7 @@ This skill makes the agent the main interface for maintaining an LLM wiki. Use t
 | Turn raw material into wiki pages | Ingest | `references/ingest-workflow.md` |
 | Ask what the wiki knows | Query | `references/query-workflow.md` |
 | Save a useful conversation or debugging session | Distill | `references/distill-workflow.md` |
-| Fix wiki health, links, or schema issues | Repair | `references/repair-workflow.md` |
+| Health-check the wiki, fix or surface semantic issues | Lint | `references/lint-workflow.md` |
 | Unsure about vault layout or page format | Protocol | `references/vault-protocol.md` |
 | Any destructive, ambiguous, or broad rewrite | Safety | `references/safety-rules.md` |
 

@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 `ai-memex-cli`（命令名 `memex`）是一个用于构建和维护持久化 LLM wiki 的 CLI 工具。它的核心定位是“机械层”：只做文件操作、frontmatter 校验、关键词匹配、链接检查等纯机械工作；所有语义决策（写什么内容、如何综合知识）都交给外部 LLM agent 通过 shell 调用来完成。
 
+**核心理念**（区别于 RAG）：wiki 是 **compounding artifact**（累积产物），不是查询时即兴重组的检索结果。LLM 在 ingest 时把新源整合进现有 wiki（更新 entity/concept 页、修订 summary、标注矛盾），知识编译一次后持续保持现行；查询时不再从零拼接。**Agent 拥有 `wiki/` 层**——人几乎不手写 wiki，LLM 写并维护交叉引用、矛盾标注、综合页；CLI 守住 `raw/` 的不可变性与机械正确性。该模式源自 [Karpathy 的 LLM Wiki pattern](https://gist.github.com/karpathy/442a6bf555914893e9891c11519de94f)，精神承自 Vannevar Bush 的 Memex（1945）。
+
 ## 技术栈
 
 - **运行时**：Node.js >= 20
@@ -144,25 +146,25 @@ SessionEnd hook   → distill → raw/sessions/session-*.md
 - **配置降级**：当外部 agent 命令（如 `claude -p`）不可用时，必须提供友好的降级提示或纯机械 fallback，不能 panic。
 - **MVP 验收**：新增或修改命令前，应核对 `docs/PRD-ai-memex.md` 第 7 章的验收标准（功能、鲁棒性、测试覆盖）。
 
-<!-- memex:context:start v=1 vault=C:/Users/Administrator/.llmwiki mode=digest updated=2026-04-25 -->
+<!-- memex:context:start v=1 vault=C:/Users/Administrator/.llmwiki mode=digest updated=2026-04-27 -->
 ## 🧠 Memex Knowledge Base
 
 This project is connected to a persistent knowledge base (LLM Wiki) managed by the `memex` CLI.
 
 - **Vault**: `C:/Users/Administrator/.llmwiki`
-- **Pages**: 25 (team: 25)
-- **Updated**: 2026-04-25
+- **Pages**: 26 (team: 26)
+- **Updated**: 2026-04-27
 - **Agent**: claude-code
 
 ### Index digest
 
-**team** — 25 pages
+**team** — 26 pages
 - [[agent-native-iteration-plan-2026-04-24]] — ai-memex-cli 从 CLI-first 转向 agent-native wiki 工作流的迭代计划文档
 - [[agent-first-memex-workflow]] — agent skill 是主界面，CLI 是工具箱的产品与架构原则
 - [[agent-native-architecture]] — ai-memex-cli 三层架构设计：Agent Interface、Workflow Protocol、CLI Toolbox
 - [[cli-toolbox-boundary]] — CLI 不负责语义写作、不调 LLM API、只做机械原语的架构边界定义
 - [[multi-agent-installation]] — agent profiles、slash prompts、skills、context files、user/project scope
-- …20 more (run `memex status --scene team`)
+- …21 more (run `memex status --scene team`)
 
 ### How to use memex from this session
 

@@ -26,7 +26,7 @@ import { writeFileUtf8, pathExists } from '../utils/fs.js';
 import { logger } from '../utils/logger.js';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { mkdir, readFile, readdir } from 'node:fs/promises';
+import { mkdir, readFile, readdir, rm } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 
 export interface InstallHooksOptions {
@@ -155,23 +155,16 @@ const MEMEX_COMMANDS: MemexCommand[] = [
   },
   {
     name: 'lint',
-    description: 'Health-check the wiki: orphan pages, missing frontmatter, broken links.',
-    usage: '/memex:lint',
-    shellCmd: 'memex lint',
-    examples: ['/memex:lint', '/memex:lint --json'],
-  },
-  {
-    name: 'repair',
-    description: 'Run wiki health checks and repair safe issues through the ai-memex repair workflow.',
-    usage: '/memex:repair [--safe|--review]',
-    shellCmd: 'memex lint',
-    workflow: 'Repair',
-    reference: 'references/repair-workflow.md',
-    cliHint: 'Run `memex lint` and `memex link-check`; auto-fix only clearly safe mechanical issues.',
+    description: 'Two-layer wiki health check: CLI mechanical pass (orphans, broken links, frontmatter) plus agent-driven semantic pass (contradictions, stale claims, missing cross-references, concepts without pages, data gaps, suggested next sources). Apply safe fixes directly, file unresolved findings as a wiki page.',
+    usage: '/memex:lint [--scene <scene>] [--json]',
+    shellCmd: 'memex lint $ARGS',
+    workflow: 'Lint',
+    reference: 'references/lint-workflow.md',
+    cliHint: 'Start with `memex lint --json` for the mechanical baseline, then scan the wiki for the 6 semantic categories. File anything unresolved to `summaries/lint-report-YYYY-MM-DD.md` and append `log.md`.',
     examples: [
-      '/memex:repair',
-      '/memex:repair --safe',
-      '/memex:repair --review',
+      '/memex:lint',
+      '/memex:lint --scene team',
+      '/memex:lint --json',
     ],
   },
   {
@@ -265,6 +258,29 @@ function agentRuntimeHint(agentType: string): string {
 When calling a memex CLI command that delegates semantic work to an agent, pass \`--agent ${agentType}\` unless the user already provided an explicit \`--agent\`.`;
 }
 
+/**
+ * Remove .md files in `dir` whose basename is not in `expected`.
+ * Used to clean up slash-command / skill-reference files left behind when a
+ * MEMEX_COMMANDS entry or skill reference is removed between installs.
+ * No-op when dir does not exist.
+ */
+async function pruneStaleHookFiles(
+  dir: string,
+  expected: Set<string>,
+  label: string,
+): Promise<void> {
+  if (!(await pathExists(dir))) return;
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) continue;
+    const basename = entry.name.replace(/\.md$/, '');
+    if (expected.has(basename)) continue;
+    const fullPath = join(dir, entry.name).replace(/\\/g, '/');
+    await rm(fullPath, { force: true });
+    logger.info(`Pruned stale ${label}: ${fullPath}`);
+  }
+}
+
 function buildClaudeCodeCommandFile(cmd: MemexCommand, agentType: string): string {
   if (cmd.workflow) {
     return `# memex ${cmd.name}
@@ -340,7 +356,7 @@ memex --help
 - \`/memex:ingest\` — compile raw material into wiki pages
 - \`/memex:query\` — answer from the durable wiki
 - \`/memex:distill\` — save useful conversations as raw session material
-- \`/memex:repair\` — lint and safely repair the wiki
+- \`/memex:lint\` — health-check the wiki (mechanical + semantic)
 - \`/memex:status\` — inspect vault state
 
 ## Compatible CLI shortcuts
@@ -355,7 +371,7 @@ ${MEMEX_COMMANDS.map(cmd => `- \`/memex:${cmd.name}\` — ${cmd.description}`).j
 /memex:ingest                                # process raw files into wiki pages
 /memex:query "topic"                         # answer from durable wiki knowledge
 /memex:distill                               # distill useful session knowledge
-/memex:repair                                # lint and safely repair the wiki
+/memex:lint                                  # health-check (mechanical + semantic)
 \`\`\`
 `;
 }
@@ -444,7 +460,7 @@ Use the installed \`ai-memex\` skill when the user wants a semantic workflow.
 - \`/memex:ingest\` - compile raw material into wiki pages
 - \`/memex:query\` - answer from the durable wiki
 - \`/memex:distill\` - save useful conversations as raw session material
-- \`/memex:repair\` - lint and safely repair the wiki
+- \`/memex:lint\` - health-check the wiki (mechanical + semantic)
 - \`/memex:status\` - inspect vault state
 
 ## CLI shortcuts
@@ -686,6 +702,19 @@ export async function installHooksCommand(
       }
     }
 
+    const expectedCodexPrompts = new Set(
+      promptFiles
+        .filter((f) => f.path.includes('/prompts/memex/'))
+        .map((f) => f.path.split('/').pop()!.replace(/\.md$/, '')),
+    );
+    if (expectedCodexPrompts.size > 0) {
+      await pruneStaleHookFiles(
+        join(codexPromptsDir(), 'memex').replace(/\\/g, '/'),
+        expectedCodexPrompts,
+        'codex prompt',
+      );
+    }
+
     for (const f of [...promptFiles, ...skillFiles]) {
       const dir = f.path.substring(0, f.path.lastIndexOf('/'));
       await mkdir(dir, { recursive: true });
@@ -759,6 +788,36 @@ export async function installHooksCommand(
     return;
   }
 
+  // Prune slash-command / skill-reference files left over from prior installs
+  // (e.g. a MEMEX_COMMANDS entry or skill reference that was removed).
+  if (agentType === 'claude-code') {
+    const expectedCommands = new Set(
+      files
+        .filter((f) => f.path.includes('/.claude/commands/memex/'))
+        .map((f) => f.path.split('/').pop()!.replace(/\.md$/, '')),
+    );
+    if (expectedCommands.size > 0) {
+      await pruneStaleHookFiles(
+        join(projectDir, '.claude', 'commands', 'memex').replace(/\\/g, '/'),
+        expectedCommands,
+        'slash command',
+      );
+    }
+
+    const expectedReferences = new Set(
+      files
+        .filter((f) => f.path.includes('/.claude/skills/ai-memex/references/'))
+        .map((f) => f.path.split('/').pop()!.replace(/\.md$/, '')),
+    );
+    if (expectedReferences.size > 0) {
+      await pruneStaleHookFiles(
+        join(projectDir, '.claude', 'skills', 'ai-memex', 'references').replace(/\\/g, '/'),
+        expectedReferences,
+        'skill reference',
+      );
+    }
+  }
+
   // Write all files
   let created = 0;
   for (const f of files) {
@@ -787,7 +846,7 @@ function printUsageHint(agentType: string): void {
       console.log('  /memex:ingest          — compile raw files into wiki pages');
       console.log('  /memex:query "topic"   — answer from durable wiki knowledge');
       console.log('  /memex:distill         — distill useful session knowledge');
-      console.log('  /memex:repair          — lint and safely repair the wiki');
+      console.log('  /memex:lint            — health-check (mechanical + semantic)');
       break;
     case 'opencode':
       logger.info('In your OpenCode session, type:');

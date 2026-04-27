@@ -35,7 +35,7 @@ describe('installHooksCommand', () => {
 
     expect(existsSync(join(dir, '.claude', 'commands', 'memex', 'ingest.md'))).toBe(true);
     expect(existsSync(join(dir, '.claude', 'commands', 'memex', 'query.md'))).toBe(true);
-    expect(existsSync(join(dir, '.claude', 'commands', 'memex', 'repair.md'))).toBe(true);
+    expect(existsSync(join(dir, '.claude', 'commands', 'memex', 'lint.md'))).toBe(true);
     const skillPath = join(dir, '.claude', 'skills', 'ai-memex', 'SKILL.md');
     expect(existsSync(skillPath)).toBe(true);
 
@@ -43,6 +43,7 @@ describe('installHooksCommand', () => {
     expect(skill).toContain('name: ai-memex');
     expect(skill).toContain('Core rule: preserve source truth');
     expect(existsSync(join(dir, '.claude', 'skills', 'ai-memex', 'references', 'ingest-workflow.md'))).toBe(true);
+    expect(existsSync(join(dir, '.claude', 'skills', 'ai-memex', 'references', 'lint-workflow.md'))).toBe(true);
 
     const queryCommand = await readFile(join(dir, '.claude', 'commands', 'memex', 'query.md'), 'utf-8');
     expect(queryCommand).toContain('Use the installed `ai-memex` skill.');

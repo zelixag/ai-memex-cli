@@ -42,13 +42,24 @@ When answering questions:
 
 ### Lint
 
-Run `memex lint --json`, then:
+Lint runs in two layers — the CLI does the mechanical pass, the agent does the semantic pass. Both are needed for a real wiki health check.
 
-1. Review orphan pages (no inbound links)
-2. Check for contradictions between pages
-3. Flag stale claims superseded by newer sources
-4. Find [[unresolved references]]
-5. Suggest missing cross-references
+**Mechanical lint (CLI)** — `memex lint --json` emits a structured report covering:
+
+- orphan pages (no inbound links)
+- broken / unresolved `[[references]]`
+- missing-frontmatter (required fields absent or invalid)
+
+**Semantic lint (Agent)** — consume the JSON report above as a starting point, then scan the full wiki for:
+
+1. **Contradictions between pages** — same entity / event / data point making conflicting claims across pages
+2. **Stale claims** — older pages superseded by newer sources but not yet revised
+3. **Missing cross-references** — semantically related pages that should `[[link]]` to each other but don't
+4. **Concepts mentioned but lacking their own page** — terms cited frequently in body text without a dedicated `entity` or `concept` page
+5. **Data gaps fillable by web search** — pages where a missing fact could be filled by fetching a new source
+6. **Suggested new questions / sources** — directions the current wiki implies are worth ingesting next
+
+Output of the semantic pass can be either direct repairs (edit affected pages) or a new task page filed back into the wiki (e.g. `summaries/lint-report-YYYY-MM-DD.md`). Treat lint as a wiki-improvement workflow, not just a validator.
 
 ## Page Format
 

@@ -17,7 +17,7 @@ Most RAG systems rediscover knowledge from scratch on every question — retriev
 
 This is the oldest idea in information management — Vannevar Bush's 1945 **Memex**. Bush's vision had one gap: *who does the maintenance?* LLMs fill that gap — they don't get bored updating cross-references, and they can touch 15 pages in one pass.
 
-**What ai-memex is:** a Git-backed Markdown knowledge base maintained by your AI agents. The installed `ai-memex` skill decides when to capture, ingest, query, distill, or repair knowledge. The `memex` CLI stays underneath as the mechanical toolbox: fetch sources, search the wiki, validate links/frontmatter, initialize vaults, install agent commands/skills, and parse sessions.
+**What ai-memex is:** a Git-backed Markdown knowledge base maintained by your AI agents. The installed `ai-memex` skill decides when to capture, ingest, query, distill, or lint knowledge. The `memex` CLI stays underneath as the mechanical toolbox: fetch sources, search the wiki, validate links/frontmatter, initialize vaults, install agent commands/skills, and parse sessions.
 
 **What it isn't:** a RAG system, an MCP memory server, or a black-box vector store. The CLI makes **zero LLM API calls**. Your local agent (Claude Code, Cursor, Codex, Gemini, …) does the semantic work through the skill. The wiki itself is plain Markdown in a git repo — you can read it, edit it, diff it, blame it.
 
@@ -45,7 +45,7 @@ Normal use happens inside your agent:
 2. **Ingest** — `/memex:ingest` has the agent compile raw material into durable entity / concept / source / summary pages.
 3. **Query** — `/memex:query` answers from your existing wiki with citations instead of re-deriving from scratch.
 4. **Distill** — `/memex:distill` turns useful debugging, planning, or research conversations into raw session material.
-5. **Repair** — `/memex:repair` runs health checks and lets the agent fix safe wiki issues without flattening contradictions.
+5. **Lint** — `/memex:lint` runs a two-layer health check (mechanical CLI pass + agent-driven semantic pass) and lets the agent apply safe fixes without flattening contradictions.
 6. **Status** — `/memex:status` shows the current vault state and likely next step.
 
 The CLI commands still exist, but they are the toolbox the skill calls when useful:
@@ -124,7 +124,7 @@ After onboarding, use memex from inside your agent:
 /memex:ingest
 /memex:query "what do I know about React hooks tradeoffs?"
 /memex:distill this debugging session
-/memex:repair
+/memex:lint
 ```
 
 For Claude Code, `memex onboard` / `memex install-hooks` installs both:

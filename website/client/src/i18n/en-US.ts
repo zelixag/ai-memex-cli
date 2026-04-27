@@ -31,7 +31,7 @@ export const enUS = {
   scenarios: {
     sectionTitle: "Five agent-first knowledge workflows",
     sectionSubtitle:
-      "Use memex from inside the agent conversation. You tell the agent what to capture, query, distill, or repair; the CLI runs underneath as the mechanical toolbox.",
+      "Use memex from inside the agent conversation. You tell the agent what to capture, query, distill, or lint; the CLI runs underneath as the mechanical toolbox.",
     readArticle: "Read scenario",
     backToScenarios: "Back to scenarios",
     runIt: "Say this to the agent",
@@ -274,13 +274,13 @@ You: Update the page if today's conclusion changes the old judgment.`,
         summary:
           "The goal is not one question and one answer. The agent maintains entities, concepts, sources, summaries, index, and log so knowledge gets updated, linked, merged, and checked.",
         command: `You: /memex:status
-You: /memex:repair fix broken links and stale frontmatter, ask before semantic merges
+You: /memex:lint fix broken links and stale frontmatter, ask before semantic merges
 You: /memex:query "open questions stale pages duplicate concepts"`,
         body: [
           {
             heading: "How you use it",
             text:
-              "Treat the agent as a wiki maintainer, not only an answer engine. You ask for capture, ingest, query, distill, repair, and status in natural language or slash prompts; the agent decides which memex primitives to call.",
+              "Treat the agent as a wiki maintainer, not only an answer engine. You ask for capture, ingest, query, distill, lint, and status in natural language or slash prompts; the agent decides which memex primitives to call.",
             steps: [
               "When a source arrives, the agent updates its source page and links related concepts/entities.",
               "When a concept clarifies, it updates definition, boundary, and examples.",
@@ -301,8 +301,8 @@ You: Show me what changed and what still needs review.`,
               "The user sets schema and quality standards, such as which page types require sources.",
               "For complex repair, the agent should show the plan before broad semantic edits.",
             ],
-            code: `You: /memex:repair the wiki structure.
-Agent: runs lint/link checks, proposes semantic fixes, and asks before risky merges.
+            code: `You: /memex:lint the wiki structure.
+Agent: runs mechanical lint and link-check, scans semantically, proposes fixes, and asks before risky merges.
 You: Apply the mechanical fixes and leave uncertain claims for review.`,
           },
           {
@@ -329,7 +329,7 @@ You: Do the safe repairs and summarize the remaining risks.`,
     titleLine1: "Let agents build and use",
     titleLine2: "your LLM wiki",
     subtitle:
-      "Built from Karpathy's LLM Wiki idea, but designed so your AI agent is the daily interface: the skill decides when to capture, ingest, query, distill, or repair; the memex CLI provides the underlying infrastructure for raw sources, search, lint, link checks, session parsing, and setup.",
+      "Built from Karpathy's LLM Wiki idea, but designed so your AI agent is the daily interface: the skill decides when to capture, ingest, query, distill, or lint; the memex CLI provides the underlying infrastructure for raw sources, search, lint, link checks, session parsing, and setup.",
     copyTitle: "Copy to clipboard",
     copy: "Copy",
     quickStart: "Quick Start Guide",
