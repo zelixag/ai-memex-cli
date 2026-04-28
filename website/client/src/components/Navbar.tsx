@@ -5,6 +5,7 @@ import { useState } from "react";
 import { Circle, Cpu, Github, Languages, Menu, Palette, Terminal, X } from "lucide-react";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { useI18n, type Locale } from "@/i18n";
+import { homeHref, sectionHref } from "@/lib/navigation";
 
 export default function Navbar() {
   const { locale, setLocale, messages } = useI18n();
@@ -33,7 +34,7 @@ export default function Navbar() {
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-ivory/90 backdrop-blur-md border-b border-border">
       <div className="container flex items-center justify-between h-16">
-        <a href="#" className="flex items-center gap-2.5 group">
+        <a href={homeHref()} className="flex items-center gap-2.5 group">
           <div className="w-9 h-9 rounded-lg bg-terracotta flex items-center justify-center shadow-sm group-hover:shadow-md transition-shadow">
             <Terminal className="w-5 h-5 text-ivory" />
           </div>
@@ -51,7 +52,7 @@ export default function Navbar() {
           {navLinks.map((link) => (
             <a
               key={link.href}
-              href={link.href}
+              href={sectionHref(link.href)}
               className="text-sm font-medium text-foreground/70 hover:text-terracotta transition-colors relative after:absolute after:bottom-[-2px] after:left-0 after:w-0 after:h-[1.5px] after:bg-terracotta after:transition-all hover:after:w-full"
             >
               {link.label}
@@ -104,7 +105,7 @@ export default function Navbar() {
             {messages.navbar.github}
           </a>
           <a
-            href="#quickstart"
+            href={homeHref("#quickstart")}
             className="px-4 py-2 bg-terracotta text-ivory text-sm font-semibold rounded-md hover:bg-terracotta-light transition-colors shadow-sm"
           >
             {messages.navbar.getStarted}
@@ -127,7 +128,7 @@ export default function Navbar() {
             {navLinks.map((link) => (
               <a
                 key={link.href}
-                href={link.href}
+                href={sectionHref(link.href)}
                 className="text-sm font-medium text-foreground/70 hover:text-terracotta py-2 border-b border-border/50"
                 onClick={() => setMobileOpen(false)}
               >

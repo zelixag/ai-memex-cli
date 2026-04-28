@@ -8,6 +8,7 @@ import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import NotFound from "@/pages/NotFound";
 import { useI18n } from "@/i18n";
+import { homeHref } from "@/lib/navigation";
 
 export default function ScenarioArticle() {
   const { messages } = useI18n();
@@ -26,7 +27,7 @@ export default function ScenarioArticle() {
       <main className="pt-28 pb-20">
         <article className="container max-w-4xl">
           <a
-            href={`${import.meta.env.BASE_URL}#scenarios`}
+            href={homeHref("#scenarios")}
             className="inline-flex items-center gap-2 text-sm font-semibold text-terracotta hover:text-terracotta-light transition-colors mb-10"
           >
             <ArrowLeft className="w-4 h-4" />

@@ -3,6 +3,7 @@
  */
 import { Terminal, Github, ExternalLink } from "lucide-react";
 import { useI18n } from "@/i18n";
+import { sectionHref } from "@/lib/navigation";
 
 export default function Footer() {
   const { messages } = useI18n();
@@ -40,7 +41,7 @@ export default function Footer() {
               {navLinks.map((link) => (
                 <li key={link.href}>
                   <a
-                    href={link.href}
+                    href={sectionHref(link.href)}
                     className="text-sm text-ivory/60 hover:text-terracotta-light transition-colors font-[var(--font-body)]"
                   >
                     {link.label}
