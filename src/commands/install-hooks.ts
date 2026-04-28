@@ -6,11 +6,17 @@
  * Installs memex as slash commands inside AI agent sessions.
  * After running this, you can type in your agent session:
  *
+ *   /memex:capture https://react.dev/reference
  *   /memex:ingest raw/personal
- *   /memex:fetch https://react.dev/reference
  *   /memex:distill --role backend-engineer
- *   /memex:search "react hooks"
+ *   /memex:query "what do I know about react hooks?"
+ *   /memex:lint
  *   /memex:status
+ *
+ * Slash commands are intent entrypoints (6 verbs). Mechanical primitives
+ * (`memex fetch / search / new / inject / log`) remain as CLI commands but
+ * are not surfaced as slash commands — agents call them as tools, users
+ * express intents.
  *
  * Generated file locations per agent:
  *
@@ -86,17 +92,6 @@ const MEMEX_COMMANDS: MemexCommand[] = [
     ],
   },
   {
-    name: 'fetch',
-    description: 'Fetch web content or documentation into the raw/ directory.',
-    usage: '/memex:fetch <url> [options]',
-    shellCmd: 'memex fetch $ARGS',
-    examples: [
-      '/memex:fetch https://react.dev/reference/react/hooks',
-      '/memex:fetch https://docs.anthropic.com --depth 2',
-      '/memex:fetch https://nextjs.org/sitemap.xml --sitemap',
-    ],
-  },
-  {
     name: 'distill',
     description: 'Distill the current or a past session into a structured raw wiki document.',
     usage: '/memex:distill [input] [--role <role>]',
@@ -108,16 +103,6 @@ const MEMEX_COMMANDS: MemexCommand[] = [
       '/memex:distill                              # distill current session',
       '/memex:distill --role backend-engineer      # extract role-specific best practices',
       '/memex:distill session.jsonl                # distill a saved session file',
-    ],
-  },
-  {
-    name: 'search',
-    description: 'Search the wiki and raw knowledge base.',
-    usage: '/memex:search <query>',
-    shellCmd: 'memex search $ARGS',
-    examples: [
-      '/memex:search "React hooks"',
-      '/memex:search "deployment best practices" --scene team',
     ],
   },
   {
@@ -144,47 +129,17 @@ const MEMEX_COMMANDS: MemexCommand[] = [
     examples: ['/memex:status'],
   },
   {
-    name: 'new',
-    description: 'Scaffold a new wiki page with correct frontmatter.',
-    usage: '/memex:new <type> <name> [--scene <scene>]',
-    shellCmd: 'memex new $ARGS',
-    examples: [
-      '/memex:new concept "React Server Components" --scene research',
-      '/memex:new entity "TypeScript" --scene personal',
-    ],
-  },
-  {
     name: 'lint',
-    description: 'Two-layer wiki health check: CLI mechanical pass (orphans, broken links, frontmatter) plus agent-driven semantic pass (contradictions, stale claims, missing cross-references, concepts without pages, data gaps, suggested next sources). Apply safe fixes directly, file unresolved findings as a wiki page.',
-    usage: '/memex:lint [--scene <scene>] [--json]',
-    shellCmd: 'memex lint $ARGS',
+    description: 'Two-layer wiki health check. The CLI runs the mechanical pass (orphans, broken links, frontmatter) and then spawns a sub-agent with the live schema for the semantic pass (contradictions, stale claims, missing cross-references, concepts without pages, data gaps, suggested next sources, cross-scene duplicates). The sub-agent applies safe fixes directly and files unresolved findings as a wiki page.',
+    usage: '/memex:lint [--scene <scene>]',
+    shellCmd: 'memex lint --with-semantic $ARGS',
     workflow: 'Lint',
     reference: 'references/lint-workflow.md',
-    cliHint: 'Start with `memex lint --json` for the mechanical baseline, then scan the wiki for the 6 semantic categories. File anything unresolved to `overviews/lint-report-YYYY-MM-DD.md` (type: overview) and append `log.md`.',
+    cliHint: 'Run `memex lint --with-semantic` (default for this slash). The CLI handles the mechanical + semantic split; do NOT manually rerun semantic in the outer session — the sub-agent already has live schema and writes findings back to the wiki.',
     examples: [
       '/memex:lint',
       '/memex:lint --scene team',
-      '/memex:lint --json',
-    ],
-  },
-  {
-    name: 'inject',
-    description: 'Output relevant wiki context for the current task (saves tokens, improves precision).',
-    usage: '/memex:inject [--task <description>] [--keywords <kw>]',
-    shellCmd: 'memex inject $ARGS',
-    examples: [
-      '/memex:inject --task "implement authentication"',
-      '/memex:inject --keywords "react,typescript,hooks"',
-    ],
-  },
-  {
-    name: 'log',
-    description: 'Append a log entry to the vault activity log.',
-    usage: '/memex:log <action> [--note <text>]',
-    shellCmd: 'memex log $ARGS',
-    examples: [
-      '/memex:log ingest --target "react-hooks" --note "added from docs"',
-      '/memex:log decision --note "chose Zustand over Redux for simplicity"',
+      '/memex:lint --dry-run',
     ],
   },
 ];
@@ -852,7 +807,7 @@ function printUsageHint(agentType: string): void {
       logger.info('In your OpenCode session, type:');
       console.log('  /memex:status');
       console.log('  /memex:ingest [target]');
-      console.log('  /memex:search "topic"');
+      console.log('  /memex:query "topic"');
       break;
     case 'gemini-cli':
       logger.info('In your Gemini CLI session, type:');

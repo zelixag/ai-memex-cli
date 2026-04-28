@@ -482,17 +482,17 @@ memex update --source npm      # 强制从 npm 更新
 ### Claude Code
 
 ```
-/memex:help                          # 列出全部命令
-/memex:status                        # 查看 vault 总览
-/memex:fetch https://docs.example.com # 抓取文档
-/memex:fetch "react hooks tutorial"  # 按关键词搜索并抓取
-/memex:ingest raw/personal           # 处理 raw 文件
-/memex:distill                       # 批量蒸馏全部会话
-/memex:search "authentication"       # 搜索知识库
-/memex:lint                          # 健康检查
-/memex:watch --daemon --heal         # 启动自愈守护进程
-/memex:new concept "React Hooks"     # 新建页面
+/memex:help                                # 列出全部命令
+/memex:status                              # 查看 vault 总览
+/memex:capture https://docs.example.com    # 把源材料抓进 raw/
+/memex:capture "react hooks tutorial"      # 按关键词搜索并抓取
+/memex:ingest raw/personal                 # 把 raw 编进 wiki 页面
+/memex:distill                             # 蒸馏当前会话
+/memex:query "authentication patterns"     # 从 wiki 综合答案
+/memex:lint                                # 双层健康检查
 ```
+
+> Slash 命令是 6 个意图动词。机械原语（`memex fetch / search / new / inject / log`）仍然作为 CLI 命令保留，给脚本和高级用户直接用。
 
 ### 支持的 agent
 

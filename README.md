@@ -477,17 +477,17 @@ If you ran `memex onboard` or `memex install-hooks`, you can trigger the CLI dir
 ### Claude Code
 
 ```
-/memex:help                          # List all commands
-/memex:status                        # View vault overview
-/memex:fetch https://docs.example.com # Fetch documentation
-/memex:fetch "react hooks tutorial"  # Search and fetch by keywords
-/memex:ingest raw/personal           # Process raw files
-/memex:distill                       # Batch-convert all sessions
-/memex:search "authentication"       # Search knowledge base
-/memex:lint                          # Health check
-/memex:watch --daemon --heal         # Start self-healing daemon
-/memex:new concept "React Hooks"     # Create new page
+/memex:help                                # List all commands
+/memex:status                              # View vault overview
+/memex:capture https://docs.example.com    # Capture sources into raw/
+/memex:capture "react hooks tutorial"      # Search-and-capture by keywords
+/memex:ingest raw/personal                 # Compile raw into wiki pages
+/memex:distill                             # Distill the current session
+/memex:query "authentication patterns"     # Answer from durable wiki knowledge
+/memex:lint                                # Two-layer health check
 ```
+
+> Slash commands are intent verbs — 6 of them. Mechanical primitives (`memex fetch / search / new / inject / log`) remain as CLI commands for scripting and direct use.
 
 ### Supported Agents
 
