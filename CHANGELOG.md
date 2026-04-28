@@ -4,6 +4,26 @@
 
 **首次增量发版前（只需一次）**：在当前基线提交上打标签，之后新版本只会统计该标签之后的提交：`git tag v0.1.0` 并 `git push origin v0.1.0`（若尚未打过 `v0.1.0`）。
 
+## v0.6.0
+
+### ⚠️ BREAKING CHANGE — Slash Commands & Agent Workflow
+
+**`/memex:repair` 已废弃**，替换为两层架构的 `/memex:lint`：
+- CLI 机械层：`memex lint`（孤儿页、断链、frontmatter 校验）
+- Agent 语义层：`memex lint --with-semantic`（矛盾检测、陈旧声明、跨场景重复等）
+
+**Slash commands 从 11 条收敛为 6 条意图入口**：`capture` / `ingest` / `distill` / `query` / `lint` / `status`。被移除的命令功能由参数或 agent 对话自然覆盖。
+
+### 🚀 Enhancements
+
+- **`memex lint --with-semantic`**：CLI 机械校验后自动 spawn 子 agent（cwd = vault），将 live `AGENTS.md` schema + 机械报告 inline 到 prompt 中执行语义修复。实现 Management vs Use 原则：管理操作（ingest、semantic lint）在 CLI-spawned 子 agent 中运行，使用操作（query、status）留在外层 agent 会话。([`cb0680b`](https://github.com/zelixag/ai-memex-cli/commit/cb0680b))
+- **Cross-scene 规则写入 schema**：`AGENTS.md` 明确规范「一个实体 = 一个页面，跨场景用 `[[link]]` 引用」「local wiki 是只读投影，所有 durable 写入必须回 global」。([`ce7d4f9`](https://github.com/zelixag/ai-memex-cli/commit/ce7d4f9))
+- **Website 叙事对齐 agent-native**：QuickStart 从 CLI 命令列表改为对话格式（`你：/memex:capture`），Hero 副标题突出两层定位（CLI 机械层 + Agent 语义层）。([`25d7995`](https://github.com/zelixag/ai-memex-cli/commit/25d7995))
+
+### 🩹 Fixes
+
+- **`extractWikiLinks` 跳过代码块**：inline code 和 fenced code block 内的 `[[...]]` 不再被误报为断链。([`3e9ef12`](https://github.com/zelixag/ai-memex-cli/commit/3e9ef12))
+
 ## v0.5.0
 
 ### ⚠️ BREAKING CHANGE — Wiki Page Schema Revamped
