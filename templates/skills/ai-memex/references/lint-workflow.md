@@ -1,88 +1,64 @@
 # Lint Workflow
 
-Use this reference when the user asks to lint, health-check, repair, or clean up a memex wiki. Lint is the periodic wiki-improvement pass — diagnose problems, apply safe mechanical fixes, surface semantic findings for review, and file unresolved work back into the wiki so the system keeps compounding.
+Use this reference when the user asks to lint, health-check, repair, or clean up a memex wiki. Lint is the periodic wiki-improvement pass — both layers run inside the `memex lint --with-semantic` command; the outer agent should not redo semantic work in the user's session.
 
 ## Goal
 
-Run a two-layer health check (mechanical first, semantic second), apply safe fixes, ask before risky ones, and turn anything left over into a durable wiki page so it can be addressed on the next ingest cycle.
+Run the two-layer health check via `memex lint --with-semantic`, then summarize what changed and what is still open.
 
-## Two layers
+## Two layers — both handled by the CLI
 
-**Mechanical (CLI)** — deterministic, fast, no judgment required:
+The CLI runs both passes; you just invoke it.
 
-```bash
-memex lint --json          # orphan / broken-link / missing-frontmatter
-memex link-check           # detailed [[ref]] resolution
-```
+**Mechanical pass (CLI, deterministic)**:
 
-The JSON report is the input to the semantic pass.
+- orphan pages
+- broken `[[wikilinks]]`
+- missing or invalid frontmatter
 
-**Semantic (Agent)** — needs reading and judgment. After ingesting the mechanical report, scan the wiki for:
+**Semantic pass (sub-agent spawned by the CLI)** — the CLI spawns a sub-agent with `cwd = vault` and inlines the live `AGENTS.md` schema plus the mechanical report into its prompt. The sub-agent scans for:
 
-1. **Contradictions between pages** — same entity / event / data point making conflicting claims
-2. **Stale claims** — older pages superseded by newer sources but not yet revised
-3. **Missing cross-references** — semantically related pages that should `[[link]]` to each other but don't
-4. **Concepts mentioned but lacking their own page** — terms cited frequently in body text without a dedicated `entity` or `concept` page
-5. **Data gaps fillable by web search** — pages where a missing fact could be filled by fetching a new source (`memex fetch`)
-6. **Suggested new questions / sources** — directions the current wiki implies are worth ingesting next
+1. Contradictions between pages
+2. Stale claims superseded by newer sources
+3. Missing cross-references between related pages
+4. Concepts mentioned without their own page
+5. Data gaps fillable by web search
+6. Suggested new questions / sources
+7. Cross-scene duplicate entities / concepts that should be consolidated
+
+The sub-agent applies safe fixes directly and files unresolved findings as a wiki page (e.g. `overviews/lint-report-YYYY-MM-DD.md`, `type: overview`). It also appends to `log.md`.
+
+## Why the sub-agent runs semantic, not you
+
+The semantic pass needs the **live** vault schema to detect schema-bound issues (correct page types, scene rules, frontmatter requirements, cross-scene duplicate detection). Sub-agents launched by the CLI get that schema inlined automatically; the outer agent in the user's session does not. Running semantic in the outer agent risks acting on a stale schema snapshot. See the **Management vs Use** section of `SKILL.md`.
 
 ## Steps
 
-1. Run `memex lint --json` and (when link health matters) `memex link-check`. Read the structured report.
-2. Read `index.md` plus a representative sample of pages relevant to the user's scope (or the whole wiki for periodic full passes).
-3. Classify findings into three buckets: safe mechanical fix, requires review, report only.
-4. Apply safe mechanical fixes directly.
-5. Ask the user before applying anything in "requires review".
-6. File anything in "report only" — and any unresolved findings — into a new page: `overviews/lint-report-YYYY-MM-DD.md` (`type: overview`) with durable observations and suggested actions. Treat lint output as compounding wiki content, not as throwaway shell output.
-7. Re-run `memex lint` after edits to confirm the mechanical layer is clean.
-8. Append a `log.md` entry summarizing what changed and what remains open. Use the canonical format from the LLM Wiki pattern: `## [YYYY-MM-DD] lint | <scope>` (heading-level, bracketed date, verb, pipe separator) so the log stays parseable with simple shell tools.
+1. Run the lint command:
+   ```bash
+   memex lint --with-semantic
+   # add --scene <name> to scope, or --dry-run to preview the prompt
+   ```
+2. The CLI streams sub-agent output into your session. Watch for:
+   - mechanical issue counts
+   - "Semantic lint complete" line
+   - any `lint-report-*.md` page filed
+3. After it finishes, summarize for the user:
+   - mechanical issues found / fixed
+   - semantic findings handled by the sub-agent
+   - the path of any `lint-report-*.md` filed (so the user can review)
+   - whether any user decisions are pending
+4. If the user wants to act on a pending finding, then read the lint report page and discuss in the current session — that is *use* work and belongs in the outer agent.
 
-## Safe Mechanical Fixes
+## When to use a different mode
 
-Usually OK to apply directly:
-
-- add missing required frontmatter when values are obvious from filename / path / content
-- fix broken `[[wikilinks]]` caused by clear filename or title drift
-- update the `updated` date after a page edit
-- add missing `index.md` entries for existing pages
-- normalize obvious path separators in `sources` lists
-
-Still verify with a re-run of `memex lint` after editing.
-
-## Requires Review
-
-Ask the user before:
-
-- deleting orphan pages
-- merging duplicate-looking pages
-- resolving contradictory claims
-- rewriting large summaries
-- changing a page's `type` or `subtype`
-- moving pages across scenes
-- adding cross-references that imply a non-trivial conceptual claim
-
-## Report Only
-
-File as a finding without editing when:
-
-- a needed source is missing from `raw/`
-- a claim lacks evidence and no source is currently available
-- a contradiction needs domain judgment beyond the wiki
-- a page appears stale but no newer source is present
-- a concept needs its own page but the writeup requires further input from the user
-
-## Treat lint as a workflow, not a validator
-
-The point is not just to find problems — it is to compound the wiki:
-
-- Direct edits when safe → wiki gets healthier in place
-- A `lint-report-*` page when not safe → next ingest cycle has clear work to do
-- A `log.md` entry → timeline of what got fixed when
+- `memex lint` (no flag) — mechanical only, fast pre-flight check before a large operation.
+- `memex lint --json` — mechanical JSON for tooling / scripts; semantic is skipped.
+- `memex lint --with-semantic --dry-run` — print the semantic prompt without spawning the sub-agent (useful when debugging the prompt or schema).
 
 ## Completion checklist
 
-- mechanical lint clean (or remaining issues filed)
-- safe fixes applied
-- semantic findings either fixed or filed
-- `log.md` entry appended
-- user told what is still open
+- `memex lint --with-semantic` exited cleanly
+- summarized mechanical + semantic findings to the user
+- pointed the user at any `lint-report-*.md` filed by the sub-agent
+- `log.md` updated (the sub-agent appends; verify if uncertain)

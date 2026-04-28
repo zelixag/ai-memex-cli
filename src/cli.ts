@@ -329,10 +329,13 @@ cli.command('search <query>', 'Search wiki and raw pages')
     }, process.cwd());
   });
 
-cli.command('lint', 'Health-check the wiki')
+cli.command('lint', 'Health-check the wiki (mechanical; add --with-semantic for sub-agent semantic pass)')
   .option('--scene <scene>', 'Filter by scene')
   .option('--check <check>', 'Comma-separated checks')
-  .option('--json', 'Output JSON')
+  .option('--json', 'Output JSON (mechanical only; ignored with --with-semantic)')
+  .option('--with-semantic', 'After mechanical pass, spawn a sub-agent with live schema to run the semantic pass')
+  .option('--agent <agent>', 'Override agent for the semantic pass')
+  .option('--dry-run', 'Print the semantic prompt without executing the sub-agent')
   .option('--vault <vault>', 'Vault path')
   .action(async (options: Record<string, unknown>) => {
     const vault = await ensureVault(options.vault as string | undefined, process.cwd());
@@ -340,6 +343,9 @@ cli.command('lint', 'Health-check the wiki')
       scene: options.scene as string | undefined,
       check: options.check as string | undefined,
       json: options.json as boolean | undefined,
+      withSemantic: options.withSemantic as boolean | undefined,
+      agent: options.agent as string | undefined,
+      dryRun: options.dryRun as boolean | undefined,
       vault,
     }, process.cwd());
   });

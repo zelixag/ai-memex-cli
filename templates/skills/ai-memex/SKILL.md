@@ -17,6 +17,22 @@ Core rule: preserve source truth and make knowledge compound. Never blur raw sou
 
 This skill makes the agent the main interface for maintaining an LLM wiki. Use the `memex` CLI as a deterministic toolbox, not as the source of semantic judgment.
 
+## Management vs Use (read this first)
+
+Two execution models. Pick based on the workflow.
+
+| Mode | What it does | Who runs it | Sees vault `AGENTS.md`? |
+| --- | --- | --- | --- |
+| **Management** — write semantic content into the wiki (ingest, semantic lint, repair) | A **sub-agent spawned by the memex CLI** with `cwd=vault` and the vault's `AGENTS.md` inlined into its prompt | CLI delegates: `memex ingest`, `memex lint --with-semantic`, etc. | Yes — full schema, always live |
+| **Use** — read the wiki to answer the user (query, status, browsing) | The **current outer agent** in the user's project session | Outer agent calls `memex search` / `memex status` and synthesizes for the user | No — uses wiki *content*, not schema |
+
+Why this split:
+- Management is schema-bound (decide page type, scene, cross-references). Sub-agent gets full live schema, never stale.
+- Use is user-context-bound (answer in the user's task). Outer agent stays focused on the conversation.
+- The outer agent does NOT need to read the vault's `AGENTS.md` — management ops handle schema for it.
+
+Practical rule: if a workflow modifies wiki pages, prefer the CLI command that spawns a sub-agent. If it only reads or summarizes, do it in the current session.
+
 ## Workflow Selector
 
 | User intent | Workflow | Reference |
