@@ -53,23 +53,64 @@ export default function QuickStartSection() {
                   {step.description}
                 </p>
                 <div className="code-block text-sm">
-                  {step.code.split("\n").map((line, j) => (
-                    <div key={j}>
-                      {line.startsWith("#") ? (
-                        <span className="comment">{line}</span>
-                      ) : (
-                        <>
-                          <span className="prompt">$ </span>
-                          <span className="command">{line}</span>
-                        </>
-                      )}
-                    </div>
-                  ))}
+                  {step.code.split("\n").map((line, j) => {
+                    const isComment = line.startsWith("#");
+                    const isAgent = /^(你：|You:)/.test(line);
+                    if (isComment) {
+                      return (
+                        <div key={j}>
+                          <span className="comment">{line}</span>
+                        </div>
+                      );
+                    }
+                    if (isAgent) {
+                      return (
+                        <div key={j}>
+                          <span className="prompt text-terracotta">›</span>
+                          <span className="command font-semibold">{" " + line}</span>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div key={j}>
+                        <span className="prompt">$ </span>
+                        <span className="command">{line}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             </motion.div>
           ))}
         </div>
+
+        {q.cliFallback && (
+          <div className="max-w-3xl mx-auto mt-12">
+            <details className="rounded-lg border border-border/60 bg-ivory/40 p-5 group">
+              <summary className="cursor-pointer font-semibold text-ink font-[var(--font-display)] text-base list-none flex items-center justify-between">
+                <span>{q.cliFallback.title}</span>
+                <span className="text-foreground/40 text-sm group-open:rotate-90 transition-transform">▸</span>
+              </summary>
+              <p className="text-sm text-foreground/60 mt-3 mb-4 leading-relaxed font-[var(--font-body)]">
+                {q.cliFallback.description}
+              </p>
+              <div className="code-block text-sm">
+                {q.cliFallback.code.split("\n").map((line, j) => (
+                  <div key={j}>
+                    {line.startsWith("#") ? (
+                      <span className="comment">{line}</span>
+                    ) : (
+                      <>
+                        <span className="prompt">$ </span>
+                        <span className="command">{line}</span>
+                      </>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </details>
+          </div>
+        )}
 
         <motion.div
           initial={{ opacity: 0, y: 20 }}

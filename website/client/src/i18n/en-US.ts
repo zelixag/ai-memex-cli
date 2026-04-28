@@ -329,7 +329,7 @@ You: Do the safe repairs and summarize the remaining risks.`,
     titleLine1: "Let agents build and use",
     titleLine2: "your LLM wiki",
     subtitle:
-      "Built from Karpathy's LLM Wiki idea, but designed so your AI agent is the daily interface: the skill decides when to capture, ingest, query, distill, or lint; the memex CLI provides the underlying infrastructure for raw sources, search, lint, link checks, session parsing, and setup.",
+      "Your agent builds and maintains the wiki — you only source and ask. The memex CLI is the toolbox under its feet.",
     copyTitle: "Copy to clipboard",
     copy: "Copy",
     quickStart: "Quick Start Guide",
@@ -344,28 +344,32 @@ You: Do the safe repairs and summarize the remaining risks.`,
         title: "Build the wiki",
         subtitle: "Karpathy's idea, engineered for daily use",
         description:
-          "memex fetch drops raw sources into raw/ (URLs, sitemaps, DuckDuckGo keyword search, or agent-delegated fetching). memex ingest then hands raw/ to your agent and has it integrate new material into wiki/ — updating entity / concept pages, the index, and the log in one pass. Cross-references are already there.",
-        code: `memex fetch "react hooks best practices" --top 5
-memex fetch https://nextjs.org/sitemap.xml --sitemap
-memex ingest`,
+          "Tell the agent to capture and sources land in raw/. Tell it to ingest and the agent reads raw/, integrates new material into wiki/ — updating entity / concept pages, the index, and the log in one pass. Cross-references are already there. The memex CLI handles the file-level mechanics underneath.",
+        code: `You: /memex:capture "react hooks best practices"
+You: /memex:capture https://nextjs.org/sitemap.xml
+You: /memex:ingest the new material into the wiki`,
       },
       {
         title: "Distill sessions",
         subtitle: "Turn useful sessions into raw material",
         description:
-          '"Good answers can be filed back into the wiki as new pages." memex distill batch-converts every agent session you have had into structured Markdown under raw/<scene>/sessions/, ready to be re-ingested. This is the mechanism that makes debugging a tough bug yesterday inform tomorrow\'s question.',
-        code: `memex distill
-memex distill --scene personal
-memex distill --no-llm`,
+          '"Good answers can be filed back into the wiki as new pages." Have the agent distill the conversation you just had into structured Markdown under raw/<scene>/sessions/, ready to be re-ingested. This is the mechanism that makes debugging a tough bug yesterday inform tomorrow\'s question.',
+        code: `You: /memex:distill this session
+You: /memex:distill --role backend-engineer
+You: /memex:ingest the distilled material`,
       },
       {
         title: "One CLI, every agent",
         subtitle: "CLI as infrastructure — agent as interface",
         description:
-          "Works with Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Aider, Continue.dev, and generic CLI agents. memex itself makes zero API calls — it stages the right files and prompts; your local agent's session handles the LLM work. The wiki is plain Markdown you can git diff / blame.",
-        code: `memex onboard
+          "Works with Claude Code, Codex, OpenCode, Cursor, Gemini CLI, Aider, Continue.dev, and generic CLI agents. memex itself makes zero API calls — it stages the right files and prompts; your local agent's session handles the LLM work. The wiki is plain Markdown you can git diff / blame. Install once via CLI, then live in the agent.",
+        code: `# One-time install (CLI)
+memex onboard
 memex install-hooks --agent cursor
-memex ingest --agent codex`,
+
+# Daily work happens inside the agent
+You: /memex:capture <url>
+You: /memex:ingest`,
       },
     ],
     small: [
@@ -466,9 +470,9 @@ memex context status`,
       ". It handles mechanical correctness (file structure, frontmatter, linting, fetching), while your AI Agent handles semantic correctness (reading, synthesizing, linking).",
   },
   commands: {
-    sectionTitle: "Command Reference",
+    sectionTitle: "Full CLI Reference",
     sectionSubtitle:
-      "19 commands covering the full lifecycle — from fetching and ingesting raw sources to distilling sessions, linting wiki health, migrating legacy schemas, and installing slash commands in your agent.",
+      "memex ships 19 CLI commands. Daily use needs only the 6 slash intents (/memex:capture · ingest · distill · query · lint · status); the list below is the underlying reference for agent-internal calls, scripts, and power users.",
     coreTab: (n: number) => `Core Commands (${n})`,
     utilTab: (n: number) => `Utility Commands (${n})`,
     options: "Options",
@@ -758,27 +762,33 @@ memex context status`,
       },
       {
         number: "03",
-        title: "Fetch Knowledge",
+        title: "Capture sources from your agent",
         description:
-          "Grab documentation from URLs or search by keywords. Everything is saved as clean Markdown under raw/.",
-        code: `memex fetch https://react.dev/reference/react/hooks\nmemex fetch "typescript generics tutorial" --top 3`,
+          "Open the agent you just installed (Claude Code / Codex / Cursor / ...) and tell it your intent. The skill quietly drives the memex CLI to land sources as clean Markdown under raw/.",
+        code: `You: /memex:capture https://react.dev/reference/react/hooks\nYou: /memex:capture "typescript generics tutorial"`,
       },
       {
         number: "04",
-        title: "Ingest & Distill",
+        title: "Have the agent compile into the wiki",
         description:
-          "Distill every session into structured Markdown under raw/<scene>/sessions/, then run ingest so your agent integrates raw/ into wiki/. Consider watch/context only after you trust the loop.",
-        code: `memex distill\nmemex ingest\n# optional: memex watch --once`,
+          "Distill useful sessions into reusable raw material; have the agent integrate raw/ into wiki/, updating entity / concept / source pages plus index and log. State the intent — the agent picks the tools.",
+        code: `You: /memex:distill this session\nYou: /memex:ingest the new material into the wiki`,
       },
       {
         number: "05",
-        title: "Search & Use",
+        title: "Ask the wiki + lint for health",
         description:
-          "Search your knowledge base, lint for health, and inject wiki context into agent sessions on demand.",
-        code: `memex search "authentication patterns"\nmemex lint\nmemex inject`,
+          "The wiki is a compounding artifact — not re-derived per query. Ask it what you already know; periodically run the two-layer lint so the agent cleans up contradictions, orphans, and cross-scene duplicates.",
+        code: `You: /memex:query "what do I know about authentication patterns?"\nYou: /memex:lint`,
       },
     ],
     cta: "View Full Documentation on GitHub",
+    cliFallback: {
+      title: "Power user: drive the CLI directly",
+      description:
+        "Every memex CLI command stays. Scripts, CI pipelines, and power-user workflows can call the mechanical primitives without going through the agent.",
+      code: `# Capture\nmemex fetch https://react.dev/reference/react/hooks\nmemex fetch "typescript generics tutorial" --top 3\n\n# Distill / Ingest\nmemex distill\nmemex ingest\n\n# Search / Lint / Inject context\nmemex search "authentication patterns"\nmemex lint\nmemex inject --task "implement auth"`,
+    },
   },
   footer: {
     tagline:

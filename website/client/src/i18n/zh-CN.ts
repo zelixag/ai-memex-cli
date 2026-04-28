@@ -329,7 +329,7 @@ Agent：报告 vault 健康度、最近来源、stale 页面和下一步维护�
     titleLine1: "让 agent 构建并使用",
     titleLine2: "你的 LLM wiki",
     subtitle:
-      "基于 Karpathy 的 LLM Wiki 思想，但日常入口是你的 AI agent：skill 判断何时 capture、ingest、query、distill、lint；memex CLI 作为底层设施，负责 raw 源材料、搜索、Lint、链接校验、session 解析和安装配置。",
+      "agent 主导构建并维护 wiki —— 你只负责找资料和提问；memex CLI 是它脚下的工具箱。",
     copyTitle: "复制到剪贴板",
     copy: "复制",
     quickStart: "快速开始指南",
@@ -344,28 +344,32 @@ Agent：报告 vault 健康度、最近来源、stale 页面和下一步维护�
         title: "构建 wiki",
         subtitle: "Karpathy 思想的工程化落地",
         description:
-          "memex fetch 把原始资料放进 raw/（URL、站点地图、DuckDuckGo 关键词搜索或委托 agent 抓取）。memex ingest 再把 raw/ 交给 agent，让它把新材料整合进 wiki/ —— 一次性更新 entity / concept 页面、索引与日志。交叉引用已经在那里。",
-        code: `memex fetch "react hooks best practices" --top 5
-memex fetch https://nextjs.org/sitemap.xml --sitemap
-memex ingest`,
+          "你在 agent 里说要 capture，源材料就落进 raw/；说要 ingest，agent 就读 raw/，把新材料整合进 wiki/——一次性更新 entity / concept 页、索引与日志。交叉引用已经在那里。背后是 memex CLI 在做文件级机械操作。",
+        code: `你：/memex:capture "react hooks best practices"
+你：/memex:capture https://nextjs.org/sitemap.xml
+你：/memex:ingest 整合进 wiki`,
       },
       {
         title: "蒸馏会话",
         subtitle: "把有价值的会话沉淀为 raw 材料",
         description:
-          "「好的回答应该被归档回 wiki 作为新页面。」memex distill 把你用过的所有 agent 会话批量转成结构化 Markdown，落在 raw/<scene>/sessions/，等待再次 ingest。这是让昨天啃过的难题，能照亮明天提问的机制。",
-        code: `memex distill
-memex distill --scene personal
-memex distill --no-llm`,
+          "「好的回答应该被归档回 wiki 作为新页面。」让 agent 把刚刚的对话蒸馏成结构化 Markdown，落在 raw/<scene>/sessions/，下次再 ingest。这就是让昨天啃过的难题照亮明天提问的机制。",
+        code: `你：/memex:distill 这次会话
+你：/memex:distill --role backend-engineer
+你：/memex:ingest 把蒸馏的材料整合进 wiki`,
       },
       {
         title: "一个 CLI，覆盖所有 agent",
         subtitle: "CLI 是底层设施 —— agent 是主界面",
         description:
-          "兼容 Claude Code、Codex、OpenCode、Cursor、Gemini CLI、Aider、Continue.dev 与通用 CLI agent。memex 本身不调用任何大模型 API —— 只编排文件与 prompt；真正的推理在你本地 agent 的会话里。wiki 是纯 Markdown，可 git diff / blame。",
-        code: `memex onboard
+          "兼容 Claude Code、Codex、OpenCode、Cursor、Gemini CLI、Aider、Continue.dev 与通用 CLI agent。memex 本身不调用任何大模型 API —— 只编排文件与 prompt；真正的推理在你本地 agent 的会话里。wiki 是纯 Markdown，可 git diff / blame。安装一次性走 CLI。",
+        code: `# 一次性安装（CLI）
+memex onboard
 memex install-hooks --agent cursor
-memex ingest --agent codex`,
+
+# 装好后日常都在 agent 里
+你：/memex:capture <url>
+你：/memex:ingest`,
       },
     ],
     small: [
@@ -466,9 +470,9 @@ memex context status`,
       "采取零调用。它负责机械正确性（目录结构、frontmatter、校验、抓取），你的 AI 智能体负责语义正确性（阅读、综合、链接）。",
   },
   commands: {
-    sectionTitle: "命令参考",
+    sectionTitle: "CLI 完整参考",
     sectionSubtitle:
-      "19 条命令覆盖全流程 —— 从抓取与 ingest、会话蒸馏、wiki 健康检查、迁移旧 schema，到在 agent 中安装斜杠命令。",
+      "memex CLI 共 19 条命令。日常只需 6 个 slash 意图入口（/memex:capture · ingest · distill · query · lint · status）；下面是面向 agent 内部调用、脚本化和 power user 的底层完整参考。",
     coreTab: (n: number) => `核心命令（${n}）`,
     utilTab: (n: number) => `工具命令（${n}）`,
     options: "选项",
@@ -757,25 +761,33 @@ memex context status`,
       },
       {
         number: "03",
-        title: "抓取知识",
-        description: "从 URL 抓取文档或按关键词搜索。均以干净 Markdown 保存到 raw/。",
-        code: `memex fetch https://react.dev/reference/react/hooks\nmemex fetch "typescript generics tutorial" --top 3`,
+        title: "在 agent 里抓资料",
+        description:
+          "进入你刚装好的 agent（Claude Code / Codex / Cursor / ...），用对话表达意图。skill 会自动在背后调 memex CLI，把源材料以干净 Markdown 落到 raw/。",
+        code: `你：/memex:capture https://react.dev/reference/react/hooks\n你：/memex:capture "typescript generics tutorial"`,
       },
       {
         number: "04",
-        title: "摄入与蒸馏",
+        title: "让 agent 沉淀进 wiki",
         description:
-          "先把全部会话蒸馏为 raw/<scene>/sessions/ 下的结构化 Markdown，再让 agent 执行 ingest，把 raw/ 整合进 wiki/。需要时再考虑 watch/context 等进阶能力。",
-        code: `memex distill\nmemex ingest\n# 可选：memex watch --once`,
+          "把对话沉淀为可复用的会话源；让 agent 把 raw/ 整合进 wiki，更新 entity/concept/source/index/log。一句话讲清意图即可，agent 自己挑工具。",
+        code: `你：/memex:distill 这次会话\n你：/memex:ingest 把新材料整合进 wiki`,
       },
       {
         number: "05",
-        title: "搜索与使用",
-        description: "搜索知识库、健康检查，并按需把 wiki 上下文注入 agent。",
-        code: `memex search "authentication patterns"\nmemex lint\nmemex inject`,
+        title: "向 wiki 提问 + 健康检查",
+        description:
+          "wiki 是一个会累积的 artifact，不再每次重新检索。问它你已经知道什么；定期让 agent 双层 lint，把矛盾、孤儿、跨 scene 重复都收拾掉。",
+        code: `你：/memex:query "我已经知道 authentication patterns 的什么？"\n你：/memex:lint`,
       },
     ],
     cta: "在 GitHub 查看完整文档",
+    cliFallback: {
+      title: "Power user：直接调 CLI",
+      description:
+        "memex CLI 命令本身全部保留。脚本化、CI、power user 工作流可以绕过 agent 直接调底层原语。",
+      code: `# 抓资料\nmemex fetch https://react.dev/reference/react/hooks\nmemex fetch "typescript generics tutorial" --top 3\n\n# 沉淀\nmemex distill\nmemex ingest\n\n# 检索 / 健康检查 / 上下文注入\nmemex search "authentication patterns"\nmemex lint\nmemex inject --task "implement auth"`,
+    },
   },
     footer: {
     tagline:

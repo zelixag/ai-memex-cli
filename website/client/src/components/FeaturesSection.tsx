@@ -78,18 +78,31 @@ function FeatureBlock({
           {description}
         </p>
         <div className="code-block text-sm">
-          {code.split("\n").map((line, i) => (
-            <div key={i}>
-              {line.startsWith("#") ? (
-                <span className="comment">{line}</span>
-              ) : (
-                <>
-                  <span className="prompt">$ </span>
-                  <span className="command">{line}</span>
-                </>
-              )}
-            </div>
-          ))}
+          {code.split("\n").map((line, i) => {
+            const isComment = line.startsWith("#");
+            const isAgent = /^(你：|You:)/.test(line);
+            if (isComment) {
+              return (
+                <div key={i}>
+                  <span className="comment">{line}</span>
+                </div>
+              );
+            }
+            if (isAgent) {
+              return (
+                <div key={i}>
+                  <span className="prompt text-terracotta">›</span>
+                  <span className="command font-semibold">{" " + line}</span>
+                </div>
+              );
+            }
+            return (
+              <div key={i}>
+                <span className="prompt">$ </span>
+                <span className="command">{line}</span>
+              </div>
+            );
+          })}
         </div>
       </motion.div>
     </div>
@@ -201,18 +214,31 @@ export default function FeaturesSection() {
                     {card.description}
                   </p>
                   <div className="code-block text-xs mt-auto">
-                    {card.code.split("\n").map((line, j) => (
-                      <div key={j}>
-                        {line.startsWith("#") ? (
-                          <span className="comment">{line}</span>
-                        ) : (
-                          <>
-                            <span className="prompt">$ </span>
-                            <span className="command">{line}</span>
-                          </>
-                        )}
-                      </div>
-                    ))}
+                    {card.code.split("\n").map((line, j) => {
+                      const isComment = line.startsWith("#");
+                      const isAgent = /^(你：|You:)/.test(line);
+                      if (isComment) {
+                        return (
+                          <div key={j}>
+                            <span className="comment">{line}</span>
+                          </div>
+                        );
+                      }
+                      if (isAgent) {
+                        return (
+                          <div key={j}>
+                            <span className="prompt text-terracotta">›</span>
+                            <span className="command font-semibold">{" " + line}</span>
+                          </div>
+                        );
+                      }
+                      return (
+                        <div key={j}>
+                          <span className="prompt">$ </span>
+                          <span className="command">{line}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 </motion.div>
               );
